@@ -31,11 +31,11 @@ public struct ConditionalExpression: Expression, Scope {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    var result = "if \(program.show(conditions)) \(program.show(success))"
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    var result = "if \(module.show(conditions)) \(module.show(success))"
     if let f = failure {
-      result.write("\n\(program.show(f))")
+      result.write("\n\(module.show(f))")
     }
     return result
   }

@@ -36,18 +36,18 @@ public struct StructDeclaration: Declaration, Scope {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    var result = "struct \(identifier)(\(program.show(fields)))"
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    var result = "struct \(identifier)(\(module.show(fields)))"
     if !interfaces.isEmpty {
       result.write(" is ")
-      result.write(program.show(interfaces, separatedBy: " & "))
+      result.write(module.show(interfaces, separatedBy: " & "))
     }
     if !members.isEmpty {
       result.write(" where")
       for m in members {
         result.write("\n")
-        result.write(program.show(m).indented)
+        result.write(module.show(m).indented)
       }
     }
     return result

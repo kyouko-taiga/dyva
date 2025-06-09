@@ -30,18 +30,18 @@ public struct DictionaryLiteral: Expression {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    "[\(program.show(elements))]"
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    "[\(module.show(elements))]"
   }
 
 }
 
 extension DictionaryLiteral.Entry: Showable {
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    "\(program.show(key)) : \(program.show(value))"
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    "\(module.show(key)) : \(module.show(value))"
   }
 
 }

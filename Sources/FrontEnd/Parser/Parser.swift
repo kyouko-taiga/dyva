@@ -1,6 +1,6 @@
 import Utilities
 
-/// The parsing of a source file.
+/// The parsing of a source module.
 public struct Parser {
 
   /// The tokens in the input.
@@ -18,49 +18,58 @@ public struct Parser {
   /// The next token to consume, if already extracted from the source.
   private var lookahead: Token? = nil
 
-  /// Parses the contents of `source` into `file`.
-  internal static func parse(_ source: SourceFile, into file: inout Program.SourceContainer) {
+  /// Parses the contents of `source` into `module`.
+  internal static func parse(
+    _ source: SourceFile, into module: inout Module
+  ) throws {
+    assert(module.roots.isEmpty, "syntax tree is not empty")
+
     var parser = Parser(
       tokens: Lexer(tokenizing: source),
       position: SourcePosition(source.startIndex, in: source))
 
-    do {
-      try parser.parseTopLevelDeclarations(in: &file)
-    } catch let e as Diagnostic {
-      file.addDiagnostic(e)
-    } catch {
-      unreachable()
+    if module.isMain {
+      try parser.parseTopLevelStatements(in: &module)
+    } else {
+      try parser.parseTopLevelDeclarations(in: &module)
     }
+  }
+
+  /// Parses the top-level statements of an entry module.
+  private mutating func parseTopLevelStatements(
+    in module: inout Module
+  ) throws {
+    let roots = try parseStatementList(in: &module)
+    module.roots = roots.map(\.widened)
+  }
+
+  /// Parses the top-level declarations of a module.
+  private mutating func parseTopLevelDeclarations(
+    in module: inout Module
+  ) throws {
+    var roots: [AnySyntaxIdentity] = []
+    while peek() != nil {
+      try roots.append(parseDeclaration(in: &module).widened)
+    }
+    swap(&module.roots, &roots)
   }
 
   // MARK: Declarations
 
-  /// Parses the top-level declarations of a file.
-  private mutating func parseTopLevelDeclarations(
-    in file: inout Program.SourceContainer
-  ) throws {
-    assert(file.roots.isEmpty, "syntax tree is not empty")
-    var roots: [DeclarationIdentity] = []
-    while peek() != nil {
-      try roots.append(parseDeclaration(in: &file))
-    }
-    swap(&file.roots, &roots)
-  }
-
   /// Parses a top-level declaration.
   private mutating func parseDeclaration(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> DeclarationIdentity {
     let head = try peek() ?? expected("declaration")
     switch head.tag {
     case .fun, .subscript:
-      return try .init(parseFunctionDeclaration(in: &file))
+      return try .init(parseFunctionDeclaration(in: &module))
     case .struct:
-      return try .init(parseStructDeclaration(in: &file))
+      return try .init(parseStructDeclaration(in: &module))
     case .trait:
-      return try .init(parseTraitDeclaration(in: &file))
+      return try .init(parseTraitDeclaration(in: &module))
     case .var, .let, .inout:
-      return try .init(parseBindingDeclaration(as: .unconditional, in: &file))
+      return try .init(parseBindingDeclaration(as: .unconditional, in: &module))
     default:
       throw unexpected(head)
     }
@@ -68,49 +77,49 @@ public struct Parser {
 
   /// Parses a binding declaration.
   private mutating func parseBindingDeclaration(
-    as role: BindingDeclaration.Role, in file: inout Program.SourceContainer
+    as role: BindingDeclaration.Role, in module: inout Module
   ) throws -> BindingDeclaration.ID {
     let start = nextTokenStart()
-    let pattern = try parseBindingPattern(in: &file)
-    let initializer = try parseOptionalInitializerExpression(in: &file)
+    let pattern = try parseBindingPattern(in: &module)
+    let initializer = try parseOptionalInitializerExpression(in: &module)
 
-    let end = initializer.map({ (i) in file[i].site.end }) ?? file[pattern].site.end
+    let end = initializer.map({ (i) in module[i].site.end }) ?? module[pattern].site.end
     let site = SourceSpan(from: start, to: end)
 
-    return file.insert(
+    return module.insert(
       BindingDeclaration(role: role, pattern: pattern, initializer: initializer, site: site))
   }
 
   /// Parses a function declaration.
   private mutating func parseFunctionDeclaration(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> FunctionDeclaration.ID {
     let introducer = try take(.fun) ?? take(.subscript) ?? expected(.fun)
     let name = try parseMemberName()
-    let parameters = try parseParameterList(in: &file)
+    let parameters = try parseParameterList(in: &module)
 
     let body: [StatementIdentity]?
     let site: SourceSpan
 
     if take(.assign) != nil {
-      body = try parseBlockBody(in: &file)
-      site = introducer.site.extended(upTo: file[body!.last!].site.end.index)
+      body = try parseBlockBody(in: &module)
+      site = introducer.site.extended(upTo: module[body!.last!].site.end.index)
     } else {
       body = nil
       site = span(from: introducer)
     }
 
-    return file.insert(
+    return module.insert(
       FunctionDeclaration(
         introducer: introducer, name: name.value, parameters: parameters, body: body, site: site))
   }
 
   /// Parses a list of parameters if the next token is a left parenthesis.
   private mutating func parseOptionalParameterList(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> [ParameterDeclaration.ID] {
     if next(is: .leftParenthesis) {
-      return try parseParameterList(in: &file)
+      return try parseParameterList(in: &module)
     } else {
       return []
     }
@@ -118,11 +127,11 @@ public struct Parser {
 
   /// Parses a list of parameters.
   private mutating func parseParameterList(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> [ParameterDeclaration.ID] {
     try inParentheses { (me) in
       let (ps, _) = try me.commaSeparated(until: Token.hasTag(.rightParenthesis)) { (me) in
-        try me.parseParameterDeclaration(in: &file)
+        try me.parseParameterDeclaration(in: &module)
       }
       return ps
     }
@@ -130,22 +139,22 @@ public struct Parser {
 
   /// Parses the declaration of a parameter in a function declaration.
   private mutating func parseParameterDeclaration(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ParameterDeclaration.ID {
     let start = nextTokenStart()
     let (label, identifier) = try parseParameterInterface()
     var site = span(from: start)
 
     let convention = try parseOptionalPassingConvention()
-    let defaultValue = try parseOptionalInitializerExpression(in: &file)
+    let defaultValue = try parseOptionalInitializerExpression(in: &module)
 
     if let v = defaultValue {
-      site = site.extended(upTo: file[v].site.end.index)
+      site = site.extended(upTo: module[v].site.end.index)
     } else if let c = convention {
       site = site.extended(upTo: c.site.end.index)
     }
 
-    return file.insert(
+    return module.insert(
       ParameterDeclaration(
         label: label,
         identifier: identifier,
@@ -180,21 +189,21 @@ public struct Parser {
 
   /// Parses the declaration of a struct.
   private mutating func parseStructDeclaration(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> StructDeclaration.ID {
     let introducer = try parse(.struct)
     let identifier = try parse(.name)
-    let fields = try parseOptionalFieldList(in: &file)
-    let interfaces = try parseOptionalInterfaceList(in: &file)
+    let fields = try parseOptionalFieldList(in: &module)
+    let interfaces = try parseOptionalInterfaceList(in: &module)
     var site = span(from: introducer)
 
-    let members = try parseOptionalMemberList(in: &file)
+    let members = try parseOptionalMemberList(in: &module)
 
     if let m = members.last {
-      site = site.extended(upTo: file[m].site.end.index)
+      site = site.extended(upTo: module[m].site.end.index)
     }
 
-    return file.insert(
+    return module.insert(
       StructDeclaration(
         introducer: introducer,
         identifier: String(identifier.text),
@@ -206,20 +215,20 @@ public struct Parser {
 
   /// Parses the declaration of a trait.
   private mutating func parseTraitDeclaration(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> TraitDeclaration.ID {
     let introducer = try parse(.trait)
     let identifier = try parse(.name)
-    let interfaces = try parseOptionalInterfaceList(in: &file)
+    let interfaces = try parseOptionalInterfaceList(in: &module)
     var site = span(from: introducer)
 
-    let members = try parseOptionalMemberList(in: &file)
+    let members = try parseOptionalMemberList(in: &module)
 
     if let m = members.last {
-      site = site.extended(upTo: file[m].site.end.index)
+      site = site.extended(upTo: module[m].site.end.index)
     }
 
-    return file.insert(
+    return module.insert(
       TraitDeclaration(
         introducer: introducer,
         identifier: String(identifier.text),
@@ -230,10 +239,10 @@ public struct Parser {
 
   /// Parses a list of parameters if the next token is a left parenthesis.
   private mutating func parseOptionalFieldList(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> [FieldDeclaration.ID] {
     if next(is: .leftParenthesis) {
-      return try parseFieldList(in: &file)
+      return try parseFieldList(in: &module)
     } else {
       return []
     }
@@ -241,11 +250,11 @@ public struct Parser {
 
   /// Parses a list of parameters.
   private mutating func parseFieldList(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> [FieldDeclaration.ID] {
     try inParentheses { (me) in
       let (ps, _) = try me.commaSeparated(until: Token.hasTag(.rightParenthesis)) { (me) in
-        try me.parseFieldDeclaration(in: &file)
+        try me.parseFieldDeclaration(in: &module)
       }
       return ps
     }
@@ -253,31 +262,31 @@ public struct Parser {
 
   /// Parses the declaration of a field in a struct declaration.
   private mutating func parseFieldDeclaration(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> FieldDeclaration.ID {
     let start = nextTokenStart()
     let name = try parse(.name)
 
     let site: SourceSpan
-    let value = try parseOptionalInitializerExpression(in: &file)
+    let value = try parseOptionalInitializerExpression(in: &module)
     if let v = value {
-      site = SourceSpan(from: start, to: file[v].site.end)
+      site = SourceSpan(from: start, to: module[v].site.end)
     } else {
       site = span(from: start)
     }
 
-    return file.insert(
+    return module.insert(
       FieldDeclaration(identifier: String(name.text), defaultValue: value, site: site))
   }
 
   /// Parses a list of interface constraints if the next token is `is`.
   private mutating func parseOptionalInterfaceList(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> [ExpressionIdentity] {
     if take(.is) != nil {
       var xs: [ExpressionIdentity] = []
       while true {
-        try xs.append(parseCompoundExpression(in: &file))
+        try xs.append(parseCompoundExpression(in: &module))
         if take(operator: "&") == nil { break }
       }
       return xs
@@ -288,11 +297,11 @@ public struct Parser {
 
   /// Parses a sequence of member functions if the next token is `where`.
   private mutating func parseOptionalMemberList(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> [FunctionDeclaration.ID] {
     if take(.where) != nil {
       return try indented { (me) in
-        let ms = try me.parseMemberList(in: &file)
+        let ms = try me.parseMemberList(in: &module)
         if ms.isEmpty {
           throw me.expected("declaration")
         }
@@ -305,7 +314,7 @@ public struct Parser {
 
   /// Parses a sequence of member functions.
   private mutating func parseMemberList(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> [FunctionDeclaration.ID] {
     var result: [FunctionDeclaration.ID] = []
     var end: SourcePosition?
@@ -320,19 +329,19 @@ public struct Parser {
       }
 
       // Parse the next statement.
-      let s = try parseFunctionDeclaration(in: &file)
+      let s = try parseFunctionDeclaration(in: &module)
       result.append(s)
-      end = file[s].site.end
+      end = module[s].site.end
     }
     return result
   }
 
   /// Parses an initializer/default expression iff the next token is `=`.
   private mutating func parseOptionalInitializerExpression(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ExpressionIdentity? {
     if take(.assign) != nil {
-      return try parseExpression(in: &file)
+      return try parseExpression(in: &module)
     } else {
       return nil
     }
@@ -342,30 +351,30 @@ public struct Parser {
 
   /// Parses an expression.
   private mutating func parseExpression(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ExpressionIdentity {
-    try parseTypeTestExpression(in: &file)
+    try parseTypeTestExpression(in: &module)
   }
 
   /// Parses an expression possibly part of a type test.
   private mutating func parseTypeTestExpression(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ExpressionIdentity {
-    var head = try parseInfixExpression(in: &file)
+    var head = try parseInfixExpression(in: &module)
     while take(.is) != nil {
-      let rhs = try parseCompoundExpression(in: &file)
-      let s = file[head].site.extended(upTo: file[rhs].site.end.index)
-      head = .init(file.insert(TypeTest(lhs: head, rhs: rhs, site: s)))
+      let rhs = try parseCompoundExpression(in: &module)
+      let s = module[head].site.extended(upTo: module[rhs].site.end.index)
+      head = .init(module.insert(TypeTest(lhs: head, rhs: rhs, site: s)))
     }
     return head
   }
 
   /// Parses the root of infix expression whose operator binds at least as tightly as `p`.
   private mutating func parseInfixExpression(
-    minimumPrecedence p: PrecedenceGroup = .assignment, in file: inout Program.SourceContainer
+    minimumPrecedence p: PrecedenceGroup = .assignment, in module: inout Module
   ) throws -> ExpressionIdentity {
     let start = position
-    var l = try parsePrefixExpression(in: &file)
+    var l = try parsePrefixExpression(in: &module)
 
     // Can we parse a term operator?
     while p < .max {
@@ -376,15 +385,15 @@ public struct Parser {
         let (o, q) = try parseOptionalInfixOperator(notTighterThan: p)
       else { break }
 
-      let r = try parseInfixExpression(minimumPrecedence: q.next, in: &file)
-      let f = file.insert(
+      let r = try parseInfixExpression(minimumPrecedence: q.next, in: &module)
+      let f = module.insert(
         NameExpression(
           qualification: l,
           name: .init(Name(identifier: String(o.text), notation: .infix), at: o.site),
           site: o.site))
-      let s = SourceSpan(from: start, to: file[r].site.end)
+      let s = SourceSpan(from: start, to: module[r].site.end)
       let a = [Labeled(label: nil, syntax: r)]
-      let n = file.insert(Call(callee: .init(f), arguments: a, style: .parenthesized, site: s))
+      let n = module.insert(Call(callee: .init(f), arguments: a, style: .parenthesized, site: s))
       l = .init(n)
     }
 
@@ -394,7 +403,7 @@ public struct Parser {
 
   /// Parses an expression possibly prefixed by an operator.
   private mutating func parsePrefixExpression(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ExpressionIdentity {
     // Is there a prefix operator?
     if let o = take(.operator) {
@@ -403,39 +412,39 @@ public struct Parser {
           .error, "unary operator '\(o.text)' cannot be separated from its operand", at: o.site)
       }
 
-      let e = try parsePostfixExpression(in: &file)
-      let f = file.insert(
+      let e = try parsePostfixExpression(in: &module)
+      let f = module.insert(
         NameExpression(
           qualification: e,
           name: .init(Name(identifier: String(o.text), notation: .prefix), at: o.site),
           site: o.site))
-      let s = SourceSpan(from: o.site.start, to: file[e].site.end)
-      let n = file.insert(Call(callee: .init(f), arguments: [], style: .parenthesized, site: s))
+      let s = SourceSpan(from: o.site.start, to: module[e].site.end)
+      let n = module.insert(Call(callee: .init(f), arguments: [], style: .parenthesized, site: s))
       return .init(n)
     }
 
     // No prefix operator; simply parse a compound expression.
     else {
-      return try parsePostfixExpression(in: &file)
+      return try parsePostfixExpression(in: &module)
     }
   }
 
   /// Parses an expression possibly suffixed by an operator.
   private mutating func parsePostfixExpression(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ExpressionIdentity {
-    let e = try parseCompoundExpression(in: &file)
+    let e = try parseCompoundExpression(in: &module)
 
     // Is there a postfix operator?
     if next(is: .operator) && !existWhitespacesBeforeNextToken() {
       let o = take()!
-      let f = file.insert(
+      let f = module.insert(
         NameExpression(
           qualification: e,
           name: .init(Name(identifier: String(o.text), notation: .postfix), at: o.site),
           site: o.site))
-      let s = SourceSpan(from: file[e].site.start, to: o.site.end)
-      let n = file.insert(Call(callee: .init(f), arguments: [], style: .parenthesized, site: s))
+      let s = SourceSpan(from: module[e].site.start, to: o.site.end)
+      let n = module.insert(Call(callee: .init(f), arguments: [], style: .parenthesized, site: s))
       return .init(n)
     }
 
@@ -447,22 +456,22 @@ public struct Parser {
 
   /// Parses an expression made of one or more components.
   private mutating func parseCompoundExpression(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ExpressionIdentity {
-    let head = try parsePrimaryExpression(in: &file)
-    return try appendCompounds(to: head, in: &file)
+    let head = try parsePrimaryExpression(in: &module)
+    return try appendCompounds(to: head, in: &module)
   }
 
   /// Parses the arguments and nominal components that can be affixed to `head`.
   private mutating func appendCompounds(
-    to head: ExpressionIdentity, in file: inout Program.SourceContainer
+    to head: ExpressionIdentity, in module: inout Module
   ) throws -> ExpressionIdentity {
     var h = head
     while true {
       // Qualifications and bracketed calls bind more tightly than mutation markers.
-      if let n = try appendNominalComponent(to: h, in: &file) {
+      if let n = try appendNominalComponent(to: h, in: &module) {
         h = n
-      } else if let n = try appendArguments(to: h, in: &file) {
+      } else if let n = try appendArguments(to: h, in: &module) {
         h = n
       } else {
         break
@@ -474,7 +483,7 @@ public struct Parser {
   /// If the next token is a left parenthesis or bracket, parses an argument list and returns a
   /// call applying `head`. Otherwise, returns `nil`.
   private mutating func appendArguments(
-    to head: ExpressionIdentity, in file: inout Program.SourceContainer
+    to head: ExpressionIdentity, in module: inout Module
   ) throws -> ExpressionIdentity? {
     // Argument list must start on the same line.
     guard let next = peek(), !existNewline(from: position, to: next.site.start) else { return nil }
@@ -493,54 +502,54 @@ public struct Parser {
     // Parse the arguments.
     let (l, r) = style.delimiters
     let (a, _) = try between((l, r)) { (me) in
-      try me.parseLabeledExpressionList(until: r, in: &file)
+      try me.parseLabeledExpressionList(until: r, in: &module)
     }
 
-    let s = file[head].site.extended(upTo: position.index)
-    let m = file.insert(Call(callee: head, arguments: a, style: style, site: s))
+    let s = module[head].site.extended(upTo: position.index)
+    let m = module.insert(Call(callee: head, arguments: a, style: style, site: s))
     return .init(m)
   }
 
   /// If the next token is `.`, parses a nominal component and returns a name expression qualified
   /// by `head`. Otherwise, returns `nil`.
   private mutating func appendNominalComponent(
-    to head: ExpressionIdentity, in file: inout Program.SourceContainer
+    to head: ExpressionIdentity, in module: inout Module
   ) throws -> ExpressionIdentity? {
     if take(.dot) == nil { return nil }
     let n = try parseQualifiedName()
-    let s = span(from: file[head].site.start)
-    let m = file.insert(NameExpression(qualification: head, name: n, site: s))
+    let s = span(from: module[head].site.start)
+    let m = module.insert(NameExpression(qualification: head, name: n, site: s))
     return .init(m)
   }
 
   /// Parses a primary expression.
   private mutating func parsePrimaryExpression(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ExpressionIdentity {
     let head = try peek() ?? expected("expression")
     switch head.tag {
     case .leftParenthesis:
-      return try parseTupleOrParenthesizedExpression(in: &file)
+      return try parseTupleOrParenthesizedExpression(in: &module)
     case .leftBracket:
-      return try parseArrayOrDictionaryLiteral(in: &file)
+      return try parseArrayOrDictionaryLiteral(in: &module)
     case .booleanLiteral:
-      return try .init(parseBooleanLiteral(in: &file))
+      return try .init(parseBooleanLiteral(in: &module))
     case .integerLiteral:
-      return try .init(parseIntegerLiteral(in: &file))
+      return try .init(parseIntegerLiteral(in: &module))
     case .floatingPointLiteral:
-      return try .init(parseFloatingPointLiteral(in: &file))
+      return try .init(parseFloatingPointLiteral(in: &module))
     case .stringLiteral:
-      return try .init(parseStringLiteral(in: &file))
+      return try .init(parseStringLiteral(in: &module))
     case .backslash:
-      return try .init(parseLambda(in: &file))
+      return try .init(parseLambda(in: &module))
     case .if:
-      return try .init(parseConditionalExpression(in: &file))
+      return try .init(parseConditionalExpression(in: &module))
     case .match:
-      return try .init(parseMatchExpression(in: &file))
+      return try .init(parseMatchExpression(in: &module))
     case .name:
-      return try .init(parseUnqualifiedNameExpression(in: &file))
+      return try .init(parseUnqualifiedNameExpression(in: &module))
     case .try:
-      return try .init(parseTryExpression(in: &file))
+      return try .init(parseTryExpression(in: &module))
     default:
       throw unexpected(head)
     }
@@ -548,50 +557,50 @@ public struct Parser {
 
   /// Parses a tuple literal or a parenthesized expression.
   private mutating func parseTupleOrParenthesizedExpression(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ExpressionIdentity {
     let start = nextTokenStart()
-    let (elements, lastComma) = try parseParenthesizedLabeledExpressionList(in: &file)
+    let (elements, lastComma) = try parseParenthesizedLabeledExpressionList(in: &module)
 
     if (elements.count == 1) && (elements[0].label == nil) && (lastComma == nil) {
       return elements[0].syntax
     } else {
-      return .init(file.insert(TupleLiteral(elements: elements, site: span(from: start))))
+      return .init(module.insert(TupleLiteral(elements: elements, site: span(from: start))))
     }
   }
 
   /// Parses an array or a dictionary literal.
   private mutating func parseArrayOrDictionaryLiteral(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ExpressionIdentity {
     let head = try parse(.leftBracket)
 
     // Empty array literal?
     if let e = take(.rightBracket) {
       let s = SourceSpan(from: head.site.start, to: e.site.end)
-      return .init(file.insert(ArrayLiteral(elements: [], site: s)))
+      return .init(module.insert(ArrayLiteral(elements: [], site: s)))
     }
 
     // Empty map literal?
     else if take(.colon) != nil {
       let e = try parse(.rightBracket)
       let s = SourceSpan(from: head.site.start, to: e.site.end)
-      return .init(file.insert(DictionaryLiteral(elements: [], site: s)))
+      return .init(module.insert(DictionaryLiteral(elements: [], site: s)))
     }
 
     // In any case, there should be an expression.
-    let first = try parseExpression(in: &file)
+    let first = try parseExpression(in: &module)
 
     // If the next token is a colon, we're parsing a dictionary literal.
     if take(.colon) != nil {
-      let value = try parseExpression(in: &file)
+      let value = try parseExpression(in: &module)
       var elements: [DictionaryLiteral.Entry] = [.init(key: first, value: value)]
 
       if take(.comma) != nil {
         let (xs, _) = try commaSeparated(until: Token.hasTag(.rightBracket)) { (me) in
-          let k = try me.parseExpression(in: &file)
+          let k = try me.parseExpression(in: &module)
           try me.discardOrThrow(.colon)
-          let v = try me.parseExpression(in: &file)
+          let v = try me.parseExpression(in: &module)
           return DictionaryLiteral.Entry(key: k, value: v)
         }
         elements.append(contentsOf: xs)
@@ -599,7 +608,7 @@ public struct Parser {
 
       let e = try parse(.rightBracket)
       let s = SourceSpan(from: head.site.start, to: e.site.end)
-      return .init(file.insert(DictionaryLiteral(elements: elements, site: s)))
+      return .init(module.insert(DictionaryLiteral(elements: elements, site: s)))
     }
 
     // Otherwise, we're parsing an array literal.
@@ -608,84 +617,84 @@ public struct Parser {
 
       if take(.comma) != nil {
         let (xs, _) = try commaSeparated(until: Token.hasTag(.rightBracket)) { (me) in
-          try me.parseExpression(in: &file)
+          try me.parseExpression(in: &module)
         }
         elements.append(contentsOf: xs)
       }
 
       let e = try parse(.rightBracket)
       let s = SourceSpan(from: head.site.start, to: e.site.end)
-      return .init(file.insert(ArrayLiteral(elements: elements, site: s)))
+      return .init(module.insert(ArrayLiteral(elements: elements, site: s)))
     }
   }
 
   /// Parses a Boolean literal.
   private mutating func parseBooleanLiteral(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> BooleanLiteral.ID {
     let value = try parse(.booleanLiteral)
-    return file.insert(BooleanLiteral(site: value.site))
+    return module.insert(BooleanLiteral(site: value.site))
   }
 
   /// Parses an integer literal.
   private mutating func parseIntegerLiteral(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> IntegerLiteral.ID {
     let value = try parse(.integerLiteral)
-    return file.insert(IntegerLiteral(site: value.site))
+    return module.insert(IntegerLiteral(site: value.site))
   }
 
   /// Parses a floating-point literal.
   private mutating func parseFloatingPointLiteral(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> FloatingPointLiteral.ID {
     let value = try parse(.floatingPointLiteral)
-    return file.insert(FloatingPointLiteral(site: value.site))
+    return module.insert(FloatingPointLiteral(site: value.site))
   }
 
   /// Parses a string literal.
   private mutating func parseStringLiteral(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> StringLiteral.ID {
     let value = try parse(.stringLiteral)
-    return file.insert(StringLiteral(site: value.site))
+    return module.insert(StringLiteral(site: value.site))
   }
 
   /// Parses a lambda expression.
   private mutating func parseLambda(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> Lambda.ID {
     let introducer = try parse(.backslash)
-    let parameters = try parseParameterList(in: &file)
+    let parameters = try parseParameterList(in: &module)
     try discardOrThrow(.in)
-    let body = try parseBlockBody(in: &file)
+    let body = try parseBlockBody(in: &module)
 
-    let site = introducer.site.extended(upTo: file[body.last!].site.end.index)
-    return file.insert(
+    let site = introducer.site.extended(upTo: module[body.last!].site.end.index)
+    return module.insert(
       Lambda(introducer: introducer, parameters: parameters, body: body, site: site))
   }
 
   /// Parses a conditional expression.
   private mutating func parseConditionalExpression(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ConditionalExpression.ID {
     let introducer = try parse(.if)
-    let conditions = try parseConditionList(in: &file)
-    let success = try parseBlock(introducedBy: .do, in: &file)
+    let conditions = try parseConditionList(in: &module)
+    let success = try parseBlock(introducedBy: .do, in: &module)
     let failure: ElseIdentity? = try take(.else).map { (e) in
       if next(is: .if) {
-        return try .init(parseConditionalExpression(in: &file))
+        return try .init(parseConditionalExpression(in: &module))
       } else {
-        let b = try parseBlockBody(in: &file)
-        let s = e.site.extended(upTo: file[b.last!].site.end.index)
-        return .init(file.insert(Block(introducer: e, statements: b, site: s)))
+        let b = try parseBlockBody(in: &module)
+        let s = e.site.extended(upTo: module[b.last!].site.end.index)
+        return .init(module.insert(Block(introducer: e, statements: b, site: s)))
       }
     }
 
-    let end = failure.map({ (e) in file[e].site.end }) ?? file[success].site.end
+    let end = failure.map({ (e) in module[e].site.end }) ?? module[success].site.end
     let site = SourceSpan(from: introducer.site.start, to: end)
 
-    return file.insert(
+    return module.insert(
       ConditionalExpression(
         introducer: introducer,
         conditions: conditions,
@@ -696,56 +705,56 @@ public struct Parser {
 
   /// Parses a non-empty comma-separated list of conditions.
   private mutating func parseConditionList(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> [ConditionIdentity] {
-    var conditions = try [parseCondition(in: &file)]
+    var conditions = try [parseCondition(in: &module)]
     while take(.comma) != nil {
-      try conditions.append(parseCondition(in: &file))
+      try conditions.append(parseCondition(in: &module))
     }
     return conditions
   }
 
   /// Parses a single item in a condition.
   private mutating func parseCondition(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ConditionIdentity {
     // Is it a match condition?
     if let i = take(.case) {
-      let p = try parsePattern(in: &file)
+      let p = try parsePattern(in: &module)
       try discardOrThrow(.assign)
-      let e = try parseExpression(in: &file)
-      let s = i.site.extended(upTo: file[e].site.end.index)
-      let c = file.insert(MatchCondition(introducer: i, pattern: p, scrutinee: e, site: s))
+      let e = try parseExpression(in: &module)
+      let s = i.site.extended(upTo: module[e].site.end.index)
+      let c = module.insert(MatchCondition(introducer: i, pattern: p, scrutinee: e, site: s))
       return .init(c)
     }
 
     // Defaults to a expression.
     else {
-      return try .init(parseExpression(in: &file))
+      return try .init(parseExpression(in: &module))
     }
   }
 
   /// Parses a match expression.
   private mutating func parseMatchExpression(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> MatchExpression.ID {
     let introducer = try parse(.match)
-    let scrutinee = try parseExpression(in: &file)
-    let branches = try parseMatchCaseList(in: &file)
+    let scrutinee = try parseExpression(in: &module)
+    let branches = try parseMatchCaseList(in: &module)
 
-    let site = introducer.site.extended(upTo: file[branches.last!].site.end.index)
-    return file.insert(
+    let site = introducer.site.extended(upTo: module[branches.last!].site.end.index)
+    return module.insert(
       MatchExpression(scrutinee: scrutinee, branches: branches, site: site))
   }
 
   /// Parses a sequence of match cases.
   private mutating func parseMatchCaseList(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> [MatchCase.ID] {
     try indented { (me) in
       var cases: [MatchCase.ID] = []
       while !me.next(is: .dedentation) {
-        try cases.append(me.parseMatchCase(in: &file))
+        try cases.append(me.parseMatchCase(in: &module))
       }
       if cases.isEmpty {
         throw me.expected("case")
@@ -756,59 +765,59 @@ public struct Parser {
 
   /// Parses a match case.
   private mutating func parseMatchCase(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> MatchCase.ID {
     let introducer = try parse(.case)
-    let pattern = try parsePattern(in: &file)
+    let pattern = try parsePattern(in: &module)
     try discardOrThrow(.do)
-    let body = try parseBlockBody(in: &file)
+    let body = try parseBlockBody(in: &module)
 
-    let site = introducer.site.extended(upTo: file[body.last!].site.end.index)
-    return file.insert(
+    let site = introducer.site.extended(upTo: module[body.last!].site.end.index)
+    return module.insert(
       MatchCase(introducer: introducer, pattern: pattern, body: body, site: site))
   }
 
   /// Parses an unqualified name expression.
   private mutating func parseUnqualifiedNameExpression(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> NameExpression.ID {
     let n = try parseName()
-    return file.insert(NameExpression(qualification: nil, name: n, site: n.site))
+    return module.insert(NameExpression(qualification: nil, name: n, site: n.site))
   }
 
   /// Parses a try-expression.
   private mutating func parseTryExpression(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> TryExpression.ID {
     let introducer = try parse(.try)
-    let statements = try parseBlockBody(in: &file)
-    let s0 = introducer.site.extended(upTo: file[statements.last!].site.end.index)
-    let body = file.insert(
+    let statements = try parseBlockBody(in: &module)
+    let s0 = introducer.site.extended(upTo: module[statements.last!].site.end.index)
+    let body = module.insert(
       Block(introducer: introducer, statements: statements, site: s0))
 
     try discardOrThrow(.catch)
-    let handlers = try parseMatchCaseList(in: &file)
+    let handlers = try parseMatchCaseList(in: &module)
 
-    let s1 = introducer.site.extended(upTo: file[handlers.last!].site.end.index)
-    return file.insert(
+    let s1 = introducer.site.extended(upTo: module[handlers.last!].site.end.index)
+    return module.insert(
       TryExpression(body: body, handlers: handlers, site: s1))
   }
 
   /// Parses a parenthesized comma-separated list of labeled patterns.
   private mutating func parseParenthesizedLabeledExpressionList(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ([Labeled<ExpressionIdentity>], lastComma: Token?) {
     try inParentheses { (me) in
-      try me.parseLabeledExpressionList(until: .rightParenthesis, in: &file)
+      try me.parseLabeledExpressionList(until: .rightParenthesis, in: &module)
     }
   }
 
   /// Parses a comma-separated list of labeled patterns.
   private mutating func parseLabeledExpressionList(
-    until rightDelimiter: Token.Tag, in file: inout Program.SourceContainer
+    until rightDelimiter: Token.Tag, in module: inout Module
   ) throws -> ([Labeled<ExpressionIdentity>], lastComma: Token?) {
     try labeledList(until: rightDelimiter) { (me) in
-      try me.parseExpression(in: &file)
+      try me.parseExpression(in: &module)
     }
   }
 
@@ -816,90 +825,90 @@ public struct Parser {
 
   /// Parses a pattern.
   private mutating func parsePattern(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> PatternIdentity {
-    var head = try parsePrimaryPattern(in: &file)
+    var head = try parsePrimaryPattern(in: &module)
     while take(.as) != nil {
-      let rhs = try parseCompoundExpression(in: &file)
-      let s = file[head].site.extended(upTo: file[rhs].site.end.index)
-      head = .init(file.insert(TypePattern(lhs: head, rhs: rhs, site: s)))
+      let rhs = try parseCompoundExpression(in: &module)
+      let s = module[head].site.extended(upTo: module[rhs].site.end.index)
+      head = .init(module.insert(TypePattern(lhs: head, rhs: rhs, site: s)))
     }
     return head
   }
 
   /// Parses a primary expression.
   private mutating func parsePrimaryPattern(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> PatternIdentity {
     let head = try peek() ?? expected("pattern")
     switch head.tag {
     case .leftParenthesis:
-      return try parseTupleOrParenthesizedPattern(in: &file)
+      return try parseTupleOrParenthesizedPattern(in: &module)
     case .name:
-      return try parseNameOrExtractorPattern(in: &file)
+      return try parseNameOrExtractorPattern(in: &module)
     case .dot:
-      return try .init(parseExtractorPattern(in: &file))
+      return try .init(parseExtractorPattern(in: &module))
     case .var, .let, .inout:
-      return try .init(parseBindingPattern(in: &file))
+      return try .init(parseBindingPattern(in: &module))
     case .underscore:
-      return try .init(parseWildcard(in: &file))
+      return try .init(parseWildcard(in: &module))
     default:
-      return try .init(parseExpression(in: &file))
+      return try .init(parseExpression(in: &module))
     }
   }
 
   /// Parses a tuple pattern or a parenthesized pattern.
   private mutating func parseTupleOrParenthesizedPattern(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> PatternIdentity {
     let start = nextTokenStart()
-    let (elements, lastComma) = try parseParenthesizedLabeledPatternList(in: &file)
+    let (elements, lastComma) = try parseParenthesizedLabeledPatternList(in: &module)
 
     if (elements.count == 1) && (elements[0].label == nil) && (lastComma == nil) {
       return elements[0].syntax
     } else {
-      return .init(file.insert(TuplePattern(elements: elements, site: span(from: start))))
+      return .init(module.insert(TuplePattern(elements: elements, site: span(from: start))))
     }
   }
 
   /// Parses a compound name expression or a variable declaration, depending on context.
   private mutating func parseNameOrExtractorPattern(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> PatternIdentity {
     let n = try parse(.name)
 
     if isParsingBindingSubpattern {
       return .init(
-        file.insert(VariableDeclaration(identifier: String(n.text), site: n.site)))
+        module.insert(VariableDeclaration(identifier: String(n.text), site: n.site)))
     } else {
       return .init(
-        file.insert(NameExpression(qualification: nil, name: .init(name: n), site: n.site)))
+        module.insert(NameExpression(qualification: nil, name: .init(name: n), site: n.site)))
     }
   }
 
   /// Parses an extractor pattern.
   private mutating func parseExtractorPattern(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ExtractorPattern.ID {
     let introducer = try parse(.dot)
-    var head = try ExpressionIdentity(parseUnqualifiedNameExpression(in: &file))
+    var head = try ExpressionIdentity(parseUnqualifiedNameExpression(in: &module))
 
     // Handle qualifications.
-    while let n = try appendNominalComponent(to: head, in: &file) {
+    while let n = try appendNominalComponent(to: head, in: &module) {
       head = n
     }
 
     // Extractor arguments must be on the same line.
     if existWhitespacesBeforeNextToken() { throw expected(.leftParenthesis) }
 
-    let (xs, _) = try parseParenthesizedLabeledPatternList(in: &file)
-    return file.insert(
+    let (xs, _) = try parseParenthesizedLabeledPatternList(in: &module)
+    return module.insert(
       ExtractorPattern(extractor: head, elements: xs, site: span(from: introducer)))
   }
 
   /// Parses a binding pattern.
   private mutating func parseBindingPattern(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> BindingPattern.ID {
     let introducer = try parseBindingIntroducer()
 
@@ -907,10 +916,10 @@ public struct Parser {
     isParsingBindingSubpattern = true
     defer { isParsingBindingSubpattern = false }
 
-    let pattern = try parsePattern(in: &file)
+    let pattern = try parsePattern(in: &module)
 
-    let site = introducer.site.extended(upTo: file[pattern].site.end.index)
-    return file.insert(
+    let site = introducer.site.extended(upTo: module[pattern].site.end.index)
+    return module.insert(
       BindingPattern(introducer: introducer, pattern: pattern, site: site))
   }
 
@@ -921,27 +930,27 @@ public struct Parser {
 
   /// Parses a wildcard.
   private mutating func parseWildcard(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> Wildcard.ID {
     let w = try parse(.underscore)
-    return file.insert(Wildcard(site: w.site))
+    return module.insert(Wildcard(site: w.site))
   }
 
   /// Parses a parenthesized comma-separated list of labeled patterns.
   private mutating func parseParenthesizedLabeledPatternList(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> ([Labeled<PatternIdentity>], lastComma: Token?) {
     try inParentheses { (me) in
-      try me.parseLabeledPatternList(until: .rightParenthesis, in: &file)
+      try me.parseLabeledPatternList(until: .rightParenthesis, in: &module)
     }
   }
 
   /// Parses a comma-separated list of labeled patterns.
   private mutating func parseLabeledPatternList(
-    until rightDelimiter: Token.Tag, in file: inout Program.SourceContainer
+    until rightDelimiter: Token.Tag, in module: inout Module
   ) throws -> ([Labeled<PatternIdentity>], lastComma: Token?) {
     try labeledList(until: rightDelimiter) { (me) in
-      try me.parsePattern(in: &file)
+      try me.parsePattern(in: &module)
     }
   }
 
@@ -949,7 +958,7 @@ public struct Parser {
 
   /// Parses a sequence of statements.
   private mutating func parseStatementList(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> [StatementIdentity] {
     var result: [StatementIdentity] = []
     var end: SourcePosition?
@@ -965,67 +974,67 @@ public struct Parser {
       }
 
       // Parse the next statement.
-      let s = try parseStatement(in: &file)
+      let s = try parseStatement(in: &module)
       result.append(s)
-      end = file[s].site.end
+      end = module[s].site.end
     }
     return result
   }
 
   /// Parses a statement.
   private mutating func parseStatement(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> StatementIdentity {
     let head = try peek() ?? expected("statement")
     switch head.tag {
     case .break:
-      return try .init(parseBreak(in: &file))
+      return try .init(parseBreak(in: &module))
     case .continue:
-      return try .init(parseContinue(in: &file))
+      return try .init(parseContinue(in: &module))
     case .fun, .subscript:
-      return try .init(parseFunctionDeclaration(in: &file))
+      return try .init(parseFunctionDeclaration(in: &module))
     case .defer:
-      return try .init(parseBlock(introducedBy: .defer, in: &file))
+      return try .init(parseBlock(introducedBy: .defer, in: &module))
     case .do:
-      return try .init(parseBlock(introducedBy: .do, in: &file))
+      return try .init(parseBlock(introducedBy: .do, in: &module))
     case .for:
-      return try .init(parseFor(in: &file))
+      return try .init(parseFor(in: &module))
     case .return:
-      return try .init(parseReturn(in: &file))
+      return try .init(parseReturn(in: &module))
     case .throw:
-      return try .init(parseThrow(in: &file))
+      return try .init(parseThrow(in: &module))
     case .var, .let, .inout:
-      return try .init(parseBindingDeclaration(as: .unconditional, in: &file))
+      return try .init(parseBindingDeclaration(as: .unconditional, in: &module))
     case .while:
-      return try .init(parseWhile(in: &file))
+      return try .init(parseWhile(in: &module))
     default:
-      return try parseAssignmentOrExpression(in: &file)
+      return try parseAssignmentOrExpression(in: &module)
     }
   }
 
   /// Parses a break statement.
   private mutating func parseBreak(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> Break.ID {
-    try file.insert(Break(introducer: parse(.break)))
+    try module.insert(Break(introducer: parse(.break)))
   }
 
   /// Parses a continue statement.
   private mutating func parseContinue(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> Continue.ID {
-    try file.insert(Continue(introducer: parse(.continue)))
+    try module.insert(Continue(introducer: parse(.continue)))
   }
 
   /// Parses a block introduced by a token having the given tag.
   private mutating func parseBlock(
-    introducedBy k: Token.Tag, in file: inout Program.SourceContainer
+    introducedBy k: Token.Tag, in module: inout Module
   ) throws -> Block.ID {
     let introducer = try parse(k)
-    let statements = try parseBlockBody(in: &file)
+    let statements = try parseBlockBody(in: &module)
 
-    let site = introducer.site.extended(upTo: file[statements.last!].site.end.index)
-    return file.insert(Block(introducer: introducer, statements: statements, site: site))
+    let site = introducer.site.extended(upTo: module[statements.last!].site.end.index)
+    return module.insert(Block(introducer: introducer, statements: statements, site: site))
   }
 
   /// Parses the body of block after its introduction token.
@@ -1035,12 +1044,12 @@ public struct Parser {
   ///
   /// - Postcondition: The returned array is not empty.
   private mutating func parseBlockBody(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> [StatementIdentity] {
     // Parses with indentation.
     if next(is: .indentation) {
       return try indented { (me) in
-        let ss = try me.parseStatementList(in: &file)
+        let ss = try me.parseStatementList(in: &module)
         if ss.isEmpty {
           throw me.expected("statement")
         }
@@ -1050,23 +1059,23 @@ public struct Parser {
 
     // Parses the statement inline.
     else {
-      return [try parseStatement(in: &file)]
+      return [try parseStatement(in: &module)]
     }
   }
 
   /// Parses a for loop.
   private mutating func parseFor(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> For.ID {
     let introducer = try parse(.for)
-    let pattern = try parsePattern(in: &file)
+    let pattern = try parsePattern(in: &module)
     try discardOrThrow(.in)
-    let sequence = try parseExpression(in: &file)
-    let filters = try parseOptionalFilterList(in: &file)
-    let body = try parseBlock(introducedBy: .do, in: &file)
+    let sequence = try parseExpression(in: &module)
+    let filters = try parseOptionalFilterList(in: &module)
+    let body = try parseBlock(introducedBy: .do, in: &module)
 
-    let site = introducer.site.extended(upTo: file[body].site.end.index)
-    return file.insert(
+    let site = introducer.site.extended(upTo: module[body].site.end.index)
+    return module.insert(
       For(
         introducer: introducer,
         pattern: pattern,
@@ -1078,10 +1087,10 @@ public struct Parser {
 
   /// Parses a list of loop filters if the next token is `where`.
   private mutating func parseOptionalFilterList(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> [ConditionIdentity] {
     if take(.where) != nil {
-      return try parseConditionList(in: &file)
+      return try parseConditionList(in: &module)
     } else {
       return []
     }
@@ -1089,53 +1098,53 @@ public struct Parser {
 
   /// Parses a return statement.
   private mutating func parseReturn(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> Return.ID {
     let introducer = try parse(.return)
 
     if !existNewlineBeforeNextToken() {
-      let v = try parseExpression(in: &file)
-      let s = introducer.site.extended(upTo: file[v].site.end.index)
-      return file.insert(Return(introducer: introducer, value: v, site: s))
+      let v = try parseExpression(in: &module)
+      let s = introducer.site.extended(upTo: module[v].site.end.index)
+      return module.insert(Return(introducer: introducer, value: v, site: s))
     } else {
-      return file.insert(Return(introducer: introducer, value: nil, site: introducer.site))
+      return module.insert(Return(introducer: introducer, value: nil, site: introducer.site))
     }
   }
 
   /// Parses a throw statement.
   private mutating func parseThrow(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> Throw.ID {
     let introducer = try parse(.return)
-    let value = try parseExpression(in: &file)
+    let value = try parseExpression(in: &module)
 
-    let site = introducer.site.extended(upTo: file[value].site.end.index)
-    return file.insert(Throw(introducer: introducer, value: value, site: site))
+    let site = introducer.site.extended(upTo: module[value].site.end.index)
+    return module.insert(Throw(introducer: introducer, value: value, site: site))
   }
 
   /// Parses a while loop.
   private mutating func parseWhile(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> While.ID {
     let introducer = try parse(.while)
-    let conditions = try parseConditionList(in: &file)
-    let body = try parseBlock(introducedBy: .do, in: &file)
+    let conditions = try parseConditionList(in: &module)
+    let body = try parseBlock(introducedBy: .do, in: &module)
 
-    let site = introducer.site.extended(upTo: file[body].site.end.index)
-    return file.insert(
+    let site = introducer.site.extended(upTo: module[body].site.end.index)
+    return module.insert(
       While(introducer: introducer, conditions: conditions, body: body, site: site))
   }
 
   /// Parses an assignment or an expression.
   private mutating func parseAssignmentOrExpression(
-    in file: inout Program.SourceContainer
+    in module: inout Module
   ) throws -> StatementIdentity {
     let start = nextTokenStart()
-    let lhs = try parseExpression(in: &file)
+    let lhs = try parseExpression(in: &module)
     if take(.assign) != nil {
-      let rhs = try parseExpression(in: &file)
-      let s = SourceSpan(from: start, to: file[rhs].site.end)
-      return .init(file.insert(Assignment(lhs: lhs, rhs: rhs, site: s)))
+      let rhs = try parseExpression(in: &module)
+      let s = SourceSpan(from: start, to: module[rhs].site.end)
+      return .init(module.insert(Assignment(lhs: lhs, rhs: rhs, site: s)))
     } else {
       return .init(lhs)
     }
@@ -1187,7 +1196,7 @@ public struct Parser {
     return (n.value, o)
   }
 
-  /// Parses an infix operator and returns the region of the file from which it has been extracted
+  /// Parses an infix operator and returns the region of the module from which it has been extracted
   /// iff it binds less than or as tightly as `p`.
   private mutating func parseOptionalInfixOperator(
     notTighterThan p: PrecedenceGroup

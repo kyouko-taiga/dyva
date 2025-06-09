@@ -2,37 +2,38 @@
 public protocol SyntaxIdentity: Hashable, Showable, Sendable {
 
   /// The type-erased value of this identity.
-  var erased: AnySyntaxIdentity { get }
+  var widened: AnySyntaxIdentity { get }
 
-  /// Creates an identifying the same node as `erased`.
-  init(uncheckedFrom erased: AnySyntaxIdentity)
+  /// Creates an identifying the same node as `widened`.
+  init(uncheckedFrom widened: AnySyntaxIdentity)
 
 }
 
 extension SyntaxIdentity {
 
-  /// The file offset of the node represented by `self` in its containing collection.
-  public var file: Program.SourceIdentity {
-    erased.file
+  /// The identity of the module containing the node represented by `self`.
+  public var module: Program.ModuleIdentity {
+    widened.module
   }
 
   /// The offset of the node represented by `self` in its containing collection.
   public var offset: Int {
-    erased.offset
+    widened.offset
   }
 
   /// Returns `true` iff `l` denotes the same node as `r`.
   public static func == <T: SyntaxIdentity>(l: Self, r: T) -> Bool {
-    l.erased == r.erased
+    l.widened == r.widened
   }
 
   /// Returns `true` iff `l` denotes the same node as `r`.
   public static func ~= <T: SyntaxIdentity>(l: Self, r: T) -> Bool {
-    l.erased == r.erased
+    l.widened == r.widened
   }
 
-  public func show(using program: Program) -> String {
-    program[self].show(using: program)
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    module[self].show(using: module)
   }
 
 }
@@ -40,7 +41,7 @@ extension SyntaxIdentity {
 /// The type-erased identity of an abstract syntax tree.
 ///
 /// An identity is composed of two offsets:
-/// - `file`: an offset identifying the file in which the node is contained.
+/// - `module`: an offset identifying the module in which the node is contained.
 /// - `node`: an offset identifying the node itself.
 ///
 /// Both offsets are interpreted as unsigned integers. The maximum representable value of the node
@@ -55,19 +56,19 @@ public struct AnySyntaxIdentity {
     self.bits = bits
   }
 
-  /// Creates an instance identifying the node at offset `n` in file `f`.
-  public init(file f: Program.SourceIdentity, offset n: Int) {
+  /// Creates an instance identifying the node at offset `n` in module `m`.
+  public init(module m: Program.ModuleIdentity, offset n: Int) {
     precondition(n < UInt32.max)
-    self.bits = (UInt64(f) << 32) | UInt64(n)
+    self.bits = (UInt64(m) << 32) | UInt64(n)
   }
 
   /// Creates an identifying the same node as `other`.
   public init<T: SyntaxIdentity>(_ other: T) {
-    self.bits = other.erased.bits
+    self.bits = other.widened.bits
   }
 
-  /// The file offset of the node represented by `self` in its containing collection.
-  public var file: Program.SourceIdentity {
+  /// The identity of the module containing the node represented by `self`.
+  public var module: Program.ModuleIdentity {
     UInt32(bits >> 32)
   }
 
@@ -80,19 +81,19 @@ public struct AnySyntaxIdentity {
 
 extension AnySyntaxIdentity: SyntaxIdentity {
 
-  /// Creates an identifying the same node as `erased`.
-  public init(uncheckedFrom erased: AnySyntaxIdentity) {
-    self = erased
+  /// Creates an identifying the same node as `widened`.
+  public init(uncheckedFrom widened: AnySyntaxIdentity) {
+    self = widened
   }
 
   /// The type-erased value of this identity.
-  public var erased: AnySyntaxIdentity {
+  public var widened: AnySyntaxIdentity {
     self
   }
 
   /// Returns `true` iff `l` denotes the same node as `r`.
   public static func == <T: SyntaxIdentity>(l: Self, r: T) -> Bool {
-    l.bits == r.erased.bits
+    l.bits == r.widened.bits
   }
 
   /// Returns `true` if `l` is ordered before `r`.
@@ -114,11 +115,11 @@ extension AnySyntaxIdentity: CustomStringConvertible {
 public struct ConcreteSyntaxIdentity<T: Syntax>: SyntaxIdentity {
 
   /// The type-erased value of this identity.
-  public let erased: AnySyntaxIdentity
+  public let widened: AnySyntaxIdentity
 
-  /// Creates an identifying the same node as `erased`.
-  public init(uncheckedFrom erased: AnySyntaxIdentity) {
-    self.erased = erased
+  /// Creates an identifying the same node as `widened`.
+  public init(uncheckedFrom widened: AnySyntaxIdentity) {
+    self.widened = widened
   }
 
 }
@@ -127,16 +128,16 @@ public struct ConcreteSyntaxIdentity<T: Syntax>: SyntaxIdentity {
 public struct DeclarationIdentity: SyntaxIdentity {
 
   /// The type-erased value of this identity.
-  public let erased: AnySyntaxIdentity
+  public let widened: AnySyntaxIdentity
 
-  /// Creates an identifying the same node as `erased`.
-  public init(uncheckedFrom erased: AnySyntaxIdentity) {
-    self.erased = erased
+  /// Creates an identifying the same node as `widened`.
+  public init(uncheckedFrom widened: AnySyntaxIdentity) {
+    self.widened = widened
   }
 
   /// Creates an instance equal to `other`.
   public init<T: Declaration>(_ other: T.ID) {
-    self.erased = other.erased
+    self.widened = other.widened
   }
 
 }
@@ -145,16 +146,16 @@ public struct DeclarationIdentity: SyntaxIdentity {
 public struct ExpressionIdentity: SyntaxIdentity {
 
   /// The type-erased value of this identity.
-  public let erased: AnySyntaxIdentity
+  public let widened: AnySyntaxIdentity
 
-  /// Creates an identifying the same node as `erased`.
-  public init(uncheckedFrom erased: AnySyntaxIdentity) {
-    self.erased = erased
+  /// Creates an identifying the same node as `widened`.
+  public init(uncheckedFrom widened: AnySyntaxIdentity) {
+    self.widened = widened
   }
 
   /// Creates an instance equal to `other`.
   public init<T: Expression>(_ other: T.ID) {
-    self.erased = other.erased
+    self.widened = other.widened
   }
 
 }
@@ -163,21 +164,21 @@ public struct ExpressionIdentity: SyntaxIdentity {
 public struct PatternIdentity: SyntaxIdentity {
 
   /// The type-erased value of this identity.
-  public let erased: AnySyntaxIdentity
+  public let widened: AnySyntaxIdentity
 
-  /// Creates an identifying the same node as `erased`.
-  public init(uncheckedFrom erased: AnySyntaxIdentity) {
-    self.erased = erased
+  /// Creates an identifying the same node as `widened`.
+  public init(uncheckedFrom widened: AnySyntaxIdentity) {
+    self.widened = widened
   }
 
   /// Creates an instance equal to `other`.
   public init<T: Pattern>(_ other: T.ID) {
-    self.erased = other.erased
+    self.widened = other.widened
   }
 
   /// Creates an instance equal to `other`.
   public init(_ other: ExpressionIdentity) {
-    self.erased = other.erased
+    self.widened = other.widened
   }
 
 }
@@ -186,26 +187,26 @@ public struct PatternIdentity: SyntaxIdentity {
 public struct StatementIdentity: SyntaxIdentity {
 
   /// The type-erased value of this identity.
-  public let erased: AnySyntaxIdentity
+  public let widened: AnySyntaxIdentity
 
-  /// Creates an identifying the same node as `erased`.
-  public init(uncheckedFrom erased: AnySyntaxIdentity) {
-    self.erased = erased
+  /// Creates an identifying the same node as `widened`.
+  public init(uncheckedFrom widened: AnySyntaxIdentity) {
+    self.widened = widened
   }
 
   /// Creates an instance equal to `other`.
   public init<T: Statement>(_ other: T.ID) {
-    self.erased = other.erased
+    self.widened = other.widened
   }
 
   /// Creates an instance equal to `other`.
   public init(_ other: DeclarationIdentity) {
-    self.erased = other.erased
+    self.widened = other.widened
   }
 
   /// Creates an instance equal to `other`.
   public init(_ other: ExpressionIdentity) {
-    self.erased = other.erased
+    self.widened = other.widened
   }
 
 }
@@ -215,21 +216,21 @@ public struct StatementIdentity: SyntaxIdentity {
 public struct ConditionIdentity: SyntaxIdentity {
 
   /// The type-erased value of this identity.
-  public let erased: AnySyntaxIdentity
+  public let widened: AnySyntaxIdentity
 
-  /// Creates an identifying the same node as `erased`.
-  public init(uncheckedFrom erased: AnySyntaxIdentity) {
-    self.erased = erased
+  /// Creates an identifying the same node as `widened`.
+  public init(uncheckedFrom widened: AnySyntaxIdentity) {
+    self.widened = widened
   }
 
   /// Creates an instance equal to `other`.
   public init(_ other: ExpressionIdentity) {
-    self.erased = other.erased
+    self.widened = other.widened
   }
 
   /// Creates an instance equal to `other`.
   public init(_ other: MatchCondition.ID) {
-    self.erased = other.erased
+    self.widened = other.widened
   }
 
 }
@@ -238,21 +239,21 @@ public struct ConditionIdentity: SyntaxIdentity {
 public struct ElseIdentity: SyntaxIdentity {
 
   /// The type-erased value of this identity.
-  public let erased: AnySyntaxIdentity
+  public let widened: AnySyntaxIdentity
 
-  /// Creates an identifying the same node as `erased`.
-  public init(uncheckedFrom erased: AnySyntaxIdentity) {
-    self.erased = erased
+  /// Creates an identifying the same node as `widened`.
+  public init(uncheckedFrom widened: AnySyntaxIdentity) {
+    self.widened = widened
   }
 
   /// Creates an instance equal to `other`.
   public init(_ other: ConditionalExpression.ID) {
-    self.erased = other.erased
+    self.widened = other.widened
   }
 
   /// Creates an instance equal to `other`.
   public init(_ other: Block.ID) {
-    self.erased = other.erased
+    self.widened = other.widened
   }
 
 }

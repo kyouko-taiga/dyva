@@ -1,5 +1,5 @@
 /// A case in a matching or try expression.
-public struct MatchCase: Expression, Scope {
+public struct MatchCase: Scope {
 
   /// The introducer of this case.
   public let introducer: Token
@@ -26,16 +26,16 @@ public struct MatchCase: Expression, Scope {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    var result = "case \(program.show(pattern)) do"
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    var result = "case \(module.show(pattern)) do"
 
     if let s = body.uniqueElement {
-      result.write(" \(program.show(s))")
+      result.write(" \(module.show(s))")
     } else {
       for s in body {
         result.write("\n")
-        result.write(program.show(s).indented)
+        result.write(module.show(s).indented)
       }
     }
 

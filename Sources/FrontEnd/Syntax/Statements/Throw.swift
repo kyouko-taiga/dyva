@@ -17,9 +17,9 @@ public struct Throw: Statement {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    "throw \(program.show(value))"
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    "throw \(module.show(value))"
   }
 
 }

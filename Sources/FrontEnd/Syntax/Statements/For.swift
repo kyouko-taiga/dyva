@@ -36,15 +36,15 @@ public struct For: Statement, Scope {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    var result = "for \(program.show(pattern)) in \(program.show(sequence))"
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    var result = "for \(module.show(pattern)) in \(module.show(sequence))"
     if !filters.isEmpty {
       result.write(" where ")
-      result.write(program.show(filters))
+      result.write(module.show(filters))
     }
     result.write(" ")
-    result.write(program.show(body))
+    result.write(module.show(body))
     return result
   }
 

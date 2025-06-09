@@ -26,9 +26,9 @@ public struct MatchCondition: Syntax {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    "case \(program.show(pattern)) = \(program.show(scrutinee))"
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    "case \(module.show(pattern)) = \(module.show(scrutinee))"
   }
 
 }

@@ -14,8 +14,8 @@ public struct BooleanLiteral: Expression {
     site.text == "true"
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
     value.description
   }
 
