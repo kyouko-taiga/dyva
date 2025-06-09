@@ -26,9 +26,9 @@ public struct While: Statement, Scope {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    "while \(program.show(conditions)) \(program.show(body))"
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    "while \(module.show(conditions)) \(module.show(body))"
   }
 
 }

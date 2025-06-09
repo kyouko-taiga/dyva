@@ -42,13 +42,13 @@ public struct Call: Expression {
     arguments.map(\.label?.value)
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
     switch style {
     case .parenthesized:
-      return "\(program.show(callee))(\(program.show(arguments)))"
+      return "\(module.show(callee))(\(module.show(arguments)))"
     case .bracketed:
-      return "\(program.show(callee))[\(program.show(arguments))]"
+      return "\(module.show(callee))[\(module.show(arguments))]"
     }
   }
 

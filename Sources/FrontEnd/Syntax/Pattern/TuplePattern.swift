@@ -13,12 +13,12 @@ public struct TuplePattern: Pattern {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
     if elements.count == 1 {
-      return "(\(program.show(elements)),)"
+      return "(\(module.show(elements)),)"
     } else {
-      return "(\(program.show(elements)))"
+      return "(\(module.show(elements)))"
     }
   }
 

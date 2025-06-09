@@ -26,12 +26,12 @@ public struct Lambda: Expression, Scope {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    var result = "\\(\(program.show(parameters))) in"
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    var result = "\\(\(module.show(parameters))) in"
     for s in body {
       result.write("\n")
-      result.write(program.show(s).indented)
+      result.write(module.show(s).indented)
     }
     return result
   }

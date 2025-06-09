@@ -31,8 +31,8 @@ public struct ParameterDeclaration: Declaration {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
     var result = ""
     if let l = label {
       result.write("\(l) \(identifier)")
@@ -43,7 +43,7 @@ public struct ParameterDeclaration: Declaration {
       result.write(": \(c.value)")
     }
     if let v = defaultValue {
-      result.write(" = \(program.show(v))")
+      result.write(" = \(module.show(v))")
     }
     return result
   }

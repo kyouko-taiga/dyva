@@ -13,9 +13,9 @@ public struct Labeled<T: SyntaxIdentity>: Hashable, Showable, Sendable {
     self.syntax = syntax
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    let v = program.show(syntax)
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    let v = module.show(syntax)
     return if let l = label { "\(l): \(v)" } else { v }
   }
 

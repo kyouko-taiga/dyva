@@ -17,12 +17,12 @@ public struct MatchExpression: Expression {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    var result = "match \(program.show(scrutinee))"
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    var result = "match \(module.show(scrutinee))"
     for b in branches {
       result.write("\n")
-      result.write(program.show(b).indented)
+      result.write(module.show(b).indented)
     }
     return result
   }

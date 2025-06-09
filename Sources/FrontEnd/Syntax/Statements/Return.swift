@@ -17,10 +17,10 @@ public struct Return: Statement {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
     if let v = value {
-      return "return \(program.show(v))"
+      return "return \(module.show(v))"
     } else {
       return "return"
     }

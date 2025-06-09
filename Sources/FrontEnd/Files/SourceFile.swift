@@ -110,7 +110,7 @@ public struct SourceFile: Hashable, Sendable {
 
   /// Calls `action` on each source file URL in `directory` having the extension `pathExtension`.
   public static func forEachURL(
-    in directory: URL, withPathExtension pathExtension: String = "hylo",
+    in directory: URL, withPathExtension pathExtension: String = "dyva",
     _ action: (URL) throws -> Void
   ) rethrows {
     let items = FileManager.default.enumerator(
@@ -125,7 +125,7 @@ public struct SourceFile: Hashable, Sendable {
 
   /// Calls `action` on each source file in `directory` having the extension `pathExtension`.
   public static func forEach(
-    in directory: URL, withPathExtension pathExtension: String = "hylo",
+    in directory: URL, withPathExtension pathExtension: String = "dyva",
     _ action: (SourceFile) throws -> Void
   ) throws {
     try forEachURL(in: directory, { (u) in try action(SourceFile(contentsOf: u)) })

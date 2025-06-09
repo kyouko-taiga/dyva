@@ -17,12 +17,12 @@ public struct Block: Statement, Scope {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
     var result = String(introducer.text)
     for s in statements {
       result.write("\n")
-      result.write(program.show(s).indented)
+      result.write(module.show(s).indented)
     }
     return result
   }

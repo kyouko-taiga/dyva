@@ -38,11 +38,11 @@ public struct BindingDeclaration: Declaration {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    var result = program.show(pattern)
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    var result = module.show(pattern)
     if let i = initializer {
-      result.write(" = \(program.show(i))")
+      result.write(" = \(module.show(i))")
     }
     return result
   }

@@ -17,9 +17,9 @@ public struct TypePattern: Pattern {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    "\(program.show(lhs)) as \(program.show(rhs))"
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    "\(module.show(lhs)) as \(module.show(rhs))"
   }
 
 }

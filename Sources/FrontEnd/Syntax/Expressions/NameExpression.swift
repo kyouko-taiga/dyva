@@ -17,10 +17,10 @@ public struct NameExpression: Expression {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
     if let q = qualification {
-      return "\(program.show(q)).\(name)"
+      return "\(module.show(q)).\(name)"
     } else {
       return name.description
     }

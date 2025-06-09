@@ -21,12 +21,12 @@ public struct TryExpression: Expression {
     self.site = site
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
-    var result = "\(program.show(body))\ncatch"
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
+    var result = "\(module.show(body))\ncatch"
     for h in handlers {
       result.write("\n")
-      result.write(program.show(h).indented)
+      result.write(module.show(h).indented)
     }
     return result
   }

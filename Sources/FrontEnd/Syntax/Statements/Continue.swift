@@ -12,8 +12,8 @@ public struct Continue: Statement {
     self.introducer = introducer
   }
 
-  /// Returns a textual representation of `self` using `program`.
-  public func show(using program: Program) -> String {
+  /// Returns a textual representation of `self`, which is in `module`.
+  public func show(using module: Module) -> String {
     "continue"
   }
 
