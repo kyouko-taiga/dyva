@@ -22,7 +22,7 @@ let f: SourceFile = #"""
     fun second(self) =
       self.x
     subscript _(self) = self.x
-  
+
   fun zero(x, y, u) =
     while case let a = x, a && b do hello()
     defer foo[x, y]
