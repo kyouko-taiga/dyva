@@ -301,4 +301,92 @@ extension Module {
     visit(self[n].scrutinee, calling: &v)
   }
 
+  /// A function that is called by `visit(pattern:with:at:calling:)` with a child of the root
+  /// pattern, the path to that child, and the corresponding scrutinee.
+  public typealias MatchVisitor = (
+    _ path: [Int],
+    _ pattern: PatternIdentity,
+    _ scrutinee: ExpressionIdentity
+  ) -> Void
+
+  /// Calls `v` on each sub-pattern in `p` and its corresponding sub-expression in `e`, along with
+  /// the path to this sub-pattern, relative to `root`.
+  ///
+  /// Use this method to walk a pattern and a corresponding scrutinee side by side and perform an
+  /// action for each pair. Children of tuple patterns are visited in pre-order if and only if the
+  /// corresponding expression is also a tuple with identical labels. Otherwise, `v` is called on
+  /// the tuple and the sub-patterns are not visited.
+  public func visit(
+    pattern p: PatternIdentity, with e: ExpressionIdentity, at root: [Int] = [],
+    calling v: MatchVisitor
+  ) {
+    switch tag(of: p) {
+    case BindingPattern.self:
+      visit(pattern: castUnchecked(p, to: BindingPattern.self), with: e, at: root, calling: v)
+    case TuplePattern.self:
+      visit(pattern: castUnchecked(p, to: TuplePattern.self), with: e, at: root, calling: v)
+    default:
+      v(root, p, e)
+    }
+  }
+
+  /// Implements `visit(pattern:with:at:calling:)` for `BindingPattern`.
+  public func visit(
+    pattern p: BindingPattern.ID, with e: ExpressionIdentity, at root: [Int] = [],
+    calling v: MatchVisitor
+  ) {
+    visit(pattern: self[p].pattern, with: e, at: root, calling: v)
+  }
+
+  /// Implements `visit(pattern:with:at:calling:)` for `TuplePattern`.
+  public func visit(
+    pattern p: TuplePattern.ID, with e: ExpressionIdentity, at root: [Int] = [],
+    calling v: MatchVisitor
+  ) {
+    let scrutinee = cast(e, to: TupleLiteral.self).flatMap { (s) in
+      let compatible = self[p].elements.elementsEqual(self[s].elements) { (a, b) in
+        a.label == b.label
+      }
+      return compatible ? s : nil
+    }
+
+    if let s = scrutinee {
+      for i in self[p].elements.indices {
+        let l = self[p].elements[i]
+        let r = self[s].elements[i]
+        visit(pattern: l.syntax, with: r.syntax, at: root + [i], calling: v)
+      }
+    } else {
+      v(root, .init(p), e)
+    }
+  }
+
+  /// Calls `action` on each variable declaration occurring in `p` along with the path of that
+  /// declaration, relative to `root`.
+  public func forEachDeclaration(
+    in p: PatternIdentity, rootedAt root: [Int],
+    _ action: (_ path: [Int], _ declaration: VariableDeclaration.ID) -> Void
+  ) {
+    switch tag(of: p) {
+    case BindingPattern.self:
+      let s = castUnchecked(p, to: BindingPattern.self)
+      forEachDeclaration(in: self[s].pattern, rootedAt: root, action)
+
+    case VariableDeclaration.self:
+      action(root, castUnchecked(p, to: VariableDeclaration.self))
+
+    case TuplePattern.self:
+      let s = castUnchecked(p, to: TuplePattern.self)
+      for (i, e) in self[s].elements.enumerated() {
+        forEachDeclaration(in: e.syntax, rootedAt: root + [i], action)
+      }
+
+    case Wildcard.self:
+      break
+
+    default:
+      unexpected(p)
+    }
+  }
+
 }

@@ -161,7 +161,7 @@ final class LexerTests: XCTestCase {
   func testKeywords() throws {
     let input: SourceFile = """
       as break case catch continue defer do else for fun if is import in infix inout let match \
-      postfix prefix return struct subscript throw trait try var where while
+      postfix prefix return struct subscript throw trait try var where while yield
       """
     var lexer = Lexer(tokenizing: input)
     try assertNext(from: &lexer, is: .as)
@@ -193,6 +193,7 @@ final class LexerTests: XCTestCase {
     try assertNext(from: &lexer, is: .var)
     try assertNext(from: &lexer, is: .where)
     try assertNext(from: &lexer, is: .while)
+    try assertNext(from: &lexer, is: .yield)
     XCTAssertNil(lexer.next())
   }
 

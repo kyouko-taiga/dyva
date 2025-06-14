@@ -38,6 +38,7 @@ public struct Token: Hashable, Sendable {
     case `var`
     case `where`
     case `while`
+    case `yield`
 
     // Scalar literals
     case booleanLiteral
@@ -90,7 +91,7 @@ public struct Token: Hashable, Sendable {
 
   /// `true` iff `self` is a reserved keyword.
   public var isKeyword: Bool {
-    (tag.rawValue >= Tag.as.rawValue) && (tag.rawValue <= Tag.while.rawValue)
+    (tag.rawValue >= Tag.as.rawValue) && (tag.rawValue <= Tag.yield.rawValue)
   }
 
   /// `true` iff `self` is an operator notation.
