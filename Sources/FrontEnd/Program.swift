@@ -6,8 +6,6 @@ import struct Foundation.URL
 /// A Dyva program.
 public struct Program {
 
-  /// The identity of a module.
-  public typealias ModuleIdentity = UInt32
 
   /// The modules in the program.
   internal private(set) var modules = OrderedDictionary<FileName, Module>()
@@ -29,7 +27,7 @@ public struct Program {
   @discardableResult
   public mutating func load(
     _ s: SourceFile, asMain isMain: Bool
-  ) -> (inserted: Bool, identity: ModuleIdentity) {
+  ) -> (inserted: Bool, identity: Module.Identity) {
     if let m = modules.index(forKey: s.name) {
       return (inserted: false, identity: UInt32(m))
     } else {
@@ -43,7 +41,6 @@ public struct Program {
       } catch let e {
         unreachable("unexpected error: \(e)")
       }
-      modules[s.name] = m
 
       // Bail out if there was a parse error.
       guard !m.containsError else {
@@ -55,6 +52,15 @@ public struct Program {
       let scoper = Scoper()
       scoper.visit(&m)
 
+      // Lower to IR.
+      var lowerer = Lowerer()
+      lowerer.visit(&m)
+
+      for f in m.functions.values.indices {
+        print(m.show(f))
+      }
+
+      modules[s.name] = m
       return (inserted: true, identity: m.identity)
     }
   }
@@ -67,7 +73,7 @@ public struct Program {
   }
 
   /// Projects the module identified by `m`.
-  internal subscript(m: ModuleIdentity) -> Module {
+  internal subscript(m: Module.Identity) -> Module {
     get {
       modules.values[Int(m)]
     }

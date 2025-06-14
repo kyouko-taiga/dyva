@@ -4,8 +4,11 @@ import Utilities
 /// A module, which consists of single source file.
 public struct Module: Sendable {
 
+  /// The identity of a module.
+  public typealias Identity = UInt32
+
   /// The position of `self` in the containing program.
-  internal let identity: Program.ModuleIdentity
+  internal let identity: Identity
 
   /// `true` iff `self` is the program entry.
   internal let isMain: Bool
@@ -31,11 +34,19 @@ public struct Module: Sendable {
   /// A table from scope to the declarations that it contains directly.
   internal var scopeToDeclarations: [Int: [DeclarationIdentity]] = [:]
 
+  /// The lowered functions in the module.
+  internal var functions: OrderedDictionary<IRFunction.Name, IRFunction> = [:]
+
   /// The diagnostics accumulated during compilation.
   internal private(set) var diagnostics = OrderedSet<Diagnostic>()
 
   /// `true` iff at least one element in `diagnostics` is an error.
   internal private(set) var containsError: Bool = false
+
+  /// `true` iff `self` has gone through scoping.
+  public var isScoped: Bool {
+    syntaxToParent.count == syntax.count
+  }
 
   /// Projects the node identified by `n`.
   public subscript<T: SyntaxIdentity>(n: T) -> any Syntax {
@@ -140,6 +151,62 @@ public struct Module: Sendable {
     }
   }
 
+  /// Returns the elements in `ns` that identify nodes of type `T`.
+  public func collect<S: Sequence, T: Syntax>(
+    _ t: T.Type, in ns: S
+  ) -> (some Sequence<ConcreteSyntaxIdentity<T>>) where S.Element: SyntaxIdentity {
+    ns.lazy.compactMap({ (n) in cast(n, to: t) })
+  }
+
+
+  /// Returns the innermost scope that strictly contains `n`.
+  public func parent<T: SyntaxIdentity>(containing n: T) -> ScopeIdentity {
+    assert(isScoped, "unscoped module")
+    let p = syntaxToParent[n.offset]
+    if p >= 0 {
+      return .init(uncheckedFrom: .init(module: identity, offset: p))
+    } else {
+      return .init(module: identity)
+    }
+  }
+
+  /// Returns a sequence containing `s` and its ancestors, from inner to outer.
+  public func scopes(from s: ScopeIdentity) -> some Sequence<ScopeIdentity> {
+    var next: Optional = s
+    return AnyIterator {
+      if let n = next {
+        next = n.node.map(parent(containing:))
+        return n
+      } else {
+        return nil
+      }
+    }
+  }
+
+  /// Returns the declarations directly contained in `s`.
+  public func declarations(lexicallyIn s: ScopeIdentity) -> [DeclarationIdentity] {
+    if let n = s.node {
+      return scopeToDeclarations[n.offset] ?? preconditionFailure("unscoped module")
+    } else {
+      return roots.compactMap(castToDeclaration(_:))
+    }
+  }
+
+  /// Returns the argument labels of `d`.
+  public func labels(of d: FunctionDeclaration.ID) -> [String?] {
+    self[d].parameters.map({ (p) in self[p].label })
+  }
+
+  /// Returns the contents of `b` it it contains exactly one expression.
+  public func uniqueExpression(in b: Block.ID) -> ExpressionIdentity? {
+    uniqueExpression(in: self[b].statements)
+  }
+
+  /// Returns the contents of `b` it it contains exactly one expression.
+  public func uniqueExpression(in b: [StatementIdentity]) -> ExpressionIdentity? {
+    b.uniqueElement.flatMap(castToExpression(_:))
+  }
+
   /// Inserts `child` into `self`.
   internal mutating func insert<T: Syntax>(_ child: T) -> T.ID {
     let d = syntax.count
@@ -149,15 +216,43 @@ public struct Module: Sendable {
     return T.ID(uncheckedFrom: .init(module: identity, offset: d))
   }
 
+  /// Projects the IR function identified by `n`.
+  internal subscript(_ n: IRFunction.Identity) -> IRFunction {
+    get {
+      functions.values[n]
+    }
+    _modify {
+      yield &functions.values[n]
+    }
+  }
+
+  /// Adds an IR function with the given properties to this module and returns its identity.
+  internal mutating func addFunction(
+    name: IRFunction.Name,  labels: [String?]
+  ) -> IRFunction.Identity {
+    if let i = functions.index(forKey: name) {
+      return i
+    } else {
+      let i = functions.count
+      functions[name] = .init(identity: i, labels: labels)
+      return i
+    }
+  }
+
   /// Adds a diagnostic to this module.
   ///
   /// - requires: The diagnostic is anchored at a position in `self`.
-  internal mutating func addDiagnostic(_ d: Diagnostic) {
+  public mutating func addDiagnostic(_ d: Diagnostic) {
     assert(d.site.source.name == source.name)
     diagnostics.append(d)
     if d.level == .error {
       containsError = true
     }
+  }
+
+  /// Returns a source span suitable to emit a disgnostic related to `n`.
+  public func anchorForDiagnostic<T: SyntaxIdentity>(about n: T) -> SourceSpan {
+    self[n].site
   }
 
   /// Reports that `n` was not expected in the current executation path and exits the program.
@@ -177,6 +272,37 @@ public struct Module: Sendable {
     _ items: T, separatedBy separator: String = ", "
   ) -> String where T.Element: Showable {
     items.map({ (n) in show(n) }).joined(separator: separator)
+  }
+
+  /// Returns a textual representation of `n`.
+  public func show(_ n: IRFunction.Identity) -> String {
+    let (name, function) = functions.elements[n]
+
+    // Write the signature.
+    var result = "fun \(show(name))("
+    for l in function.labels {
+      result.write(l ?? "_")
+      result.write(":")
+    }
+    result.write(")")
+
+    // Nothing more to do if the function has no definition.
+    if !function.isDefined { return result }
+
+    // Otherwise, renders the basic blocks.
+    result.write(" =\n")
+    for b in function.blocks.addresses {
+      let bb = BasicBlockIdentity(function: n, address: b)
+
+      result.write("  b\(b) =\n")
+      for s in function.blocks[b].instructions.addresses {
+        let r = IRValue.register(.init(block: bb, address: s))
+        let v = function.blocks[b].instructions[s].show(using: self)
+        result.write("    \(r) = \(v)\n")
+      }
+    }
+
+    return result
   }
 
 }
