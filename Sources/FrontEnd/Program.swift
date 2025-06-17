@@ -1,6 +1,7 @@
-import struct Foundation.URL
 import OrderedCollections
 import Utilities
+
+import struct Foundation.URL
 
 /// A Dyva program.
 public struct Program {
@@ -46,6 +47,7 @@ public struct Program {
 
       // Bail out if there was a parse error.
       guard !m.containsError else {
+        modules[s.name] = m
         return (inserted: true, identity: m.identity)
       }
 
