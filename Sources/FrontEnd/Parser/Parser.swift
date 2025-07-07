@@ -54,6 +54,11 @@ public struct Parser {
     swap(&module.roots, &roots)
   }
 
+  // MARK: Imports
+
+  private mutating func parseImportStatement(in module: inout Module) throws -> Import {
+  }
+
   // MARK: Declarations
 
   /// Parses a top-level declaration.
@@ -1283,7 +1288,7 @@ public struct Parser {
     // The specific character used for indentation is irrelevant.
     indententation.append(s.site.extended(toCover: e.site))
     let contents = try parse(&self)
-    for _ in 0 ..< i.count {
+    for _ in 0..<i.count {
       _ = try take(.dedentation) ?? insufficientDedentation()
     }
     indententation.removeLast()
@@ -1335,7 +1340,7 @@ public struct Parser {
   /// Do not use this method to determine the source span of a syntax tree if the last parsed
   /// element may cover dedentation tokens.
   private func span(from s: SourcePosition) -> SourceSpan {
-    .init(s.index ..< position.index, in: tokens.source)
+    .init(s.index..<position.index, in: tokens.source)
   }
 
   /// Returns a source span from the first position of `t` to the current position.
@@ -1343,7 +1348,7 @@ public struct Parser {
   /// Do not use this method to determine the source span of a syntax tree if the last parsed
   /// element may cover dedentation tokens.
   private func span(from t: Token) -> SourceSpan {
-    .init(t.site.start.index ..< position.index, in: tokens.source)
+    .init(t.site.start.index..<position.index, in: tokens.source)
   }
 
   /// Returns `true` iff there is a newline in the text from `p` up to but not including `q`.
