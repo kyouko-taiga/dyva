@@ -1,10 +1,10 @@
-import struct Foundation.URL
 import OrderedCollections
 import Utilities
 
+import struct Foundation.URL
+
 /// A Dyva program.
 public struct Program {
-
 
   /// The modules in the program.
   internal private(set) var modules = OrderedDictionary<FileName, Module>()
@@ -59,6 +59,30 @@ public struct Program {
       }
 
       modules[s.name] = m
+      // load the imported modules
+      let cwd: URL
+      switch s.name {
+      case .local(let url):
+        cwd = url
+      case _:
+        cwd = URL.currentDirectory()
+      }
+      for importID in m.imports {
+        let imp = m[importID]
+        let path = URL.init(
+          fileURLWithPath: String(m[imp.source].string), relativeTo: cwd)
+        var source: SourceFile
+        do {
+          if path.hasDirectoryPath {
+            source = try .init(contentsOf: path.appending(components: "index.dyva"))
+          } else {
+            source = try .init(contentsOf: path)
+          }
+          load(source, asMain: false)
+        } catch let e {
+          modules[s.name]!.addDiagnostic(.init(.error, "cannot read import: \(e)", at: imp.site))
+        }
+      }
       return (inserted: true, identity: m.identity)
     }
   }

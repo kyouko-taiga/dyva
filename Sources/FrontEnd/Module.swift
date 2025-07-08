@@ -23,7 +23,7 @@ public struct Module: Sendable {
   internal var syntaxToTag: [SyntaxTag] = []
 
   /// The list of all (top-level) imports in `self`.
-  internal var imports: [Import] = []
+  internal var imports: [Import.ID] = []
 
   /// The root of the syntax trees in `self`, which may be subset of the top-level declarations.
   internal var roots: [AnySyntaxIdentity] = []

@@ -32,7 +32,7 @@ public struct Import: Statement, Syntax {
   public let bindings: [Binding]
 
   /// The source of the import.
-  public let source: String
+  public let source: StringLiteral.ID
 
   /// The site from which `self` was parsed.
   public let site: SourceSpan
@@ -40,7 +40,7 @@ public struct Import: Statement, Syntax {
   public init(
     introducer: Token,
     bindings: [Binding],
-    source: String,
+    source: StringLiteral.ID,
     site: SourceSpan
   ) {
     self.introducer = introducer
@@ -51,6 +51,6 @@ public struct Import: Statement, Syntax {
 
   /// Returns a textual representation of `self`, which is in `module`.
   public func show(using module: Module) -> String {
-    "import \(bindings.map { $0.show(using: module) }.joined(by: ", ")) from \(source)"
+    "import \(bindings.map { $0.show(using: module) }.joined(by: ", ")) in \(source)"
   }
 }

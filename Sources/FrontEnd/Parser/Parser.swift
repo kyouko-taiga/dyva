@@ -28,6 +28,9 @@ public struct Parser {
       tokens: Lexer(tokenizing: source),
       position: SourcePosition(source.startIndex, in: source))
 
+    while parser.next(is: .import) {
+      module.imports.append(try parser.parseImportStatement(in: &module))
+    }
     if module.isMain {
       try parser.parseTopLevelStatements(in: &module)
     } else {
@@ -56,7 +59,23 @@ public struct Parser {
 
   // MARK: Imports
 
-  private mutating func parseImportStatement(in module: inout Module) throws -> Import {
+  private mutating func parseImportStatement(in module: inout Module) throws -> Import.ID {
+    let introducer = try take(.import) ?? expected(.import)
+    var bindings: [Import.Binding] = []
+    repeat {
+      let name = try parseMemberName()
+      if take(.as) != nil {
+        let rename = try parseMemberName()
+        bindings.append(.init(importee: name.value, rename: rename.value))
+      } else {
+        bindings.append(.init(importee: name.value, rename: nil))
+      }
+    } while take(.comma) != nil
+    let _ = try take(.in) ?? expected(.in)
+    let source = try parseStringLiteral(in: &module)
+    let site = introducer.site.extended(toCover: module[source].site)
+    return module.insert(
+      Import(introducer: introducer, bindings: bindings, source: source, site: site))
   }
 
   // MARK: Declarations
