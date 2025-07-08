@@ -663,7 +663,7 @@ public struct Parser {
     in module: inout Module
   ) throws -> StringLiteral.ID {
     let value = try parse(.stringLiteral)
-    return module.insert(StringLiteral(site: value.site))
+    return module.insert(try StringLiteral(site: value.site))
   }
 
   /// Parses a lambda expression.
