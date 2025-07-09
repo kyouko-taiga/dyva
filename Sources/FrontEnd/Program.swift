@@ -43,6 +43,7 @@ public struct Program {
 
       // Bail out if there was a parse error.
       guard !m.containsError else {
+        modules[s.name] = m
         return (inserted: true, identity: m.identity)
       }
 
@@ -95,7 +96,7 @@ public struct Program {
   }
 
   /// Projects the module identified by `m`.
-  internal subscript(m: Module.Identity) -> Module {
+  public subscript(m: Module.Identity) -> Module {
     get {
       modules.values[Int(m)]
     }
