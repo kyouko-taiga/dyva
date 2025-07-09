@@ -370,8 +370,8 @@ public struct Lowerer {
     }
 
     // Look for imports
-    if let (importee, mod) = module.namesToImports[n] {
-      return .constant(.imported(name: importee.identifier, from: mod))
+    if let decl = module.namesToImports[n] {
+      return .constant(.imported(ident: decl))
     }
 
     // Look for built-in symbols.

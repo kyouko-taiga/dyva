@@ -14,7 +14,7 @@ public enum IRConstant: Hashable, Sendable {
   case function(IRFunction.Identity)
 
   /// A reference to an imported module
-  case imported(name: String, from: Module.Identity)
+  case imported(ident: DeclarationIdentity)
 
   /// The built-in `print` function.
   case print
@@ -36,8 +36,8 @@ extension IRConstant: CustomStringConvertible {
       return "i64 \(n)"
     case .function(let n):
       return "<function(\(n))>"
-    case .imported(let name, let from):
-      return "<imported(\(name), from:\(from))>"
+    case .imported(let ident):
+      return "<imported(\(ident))>"
     case .print:
       return "print"
     case .type:

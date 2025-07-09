@@ -15,6 +15,7 @@ public struct Scoper {
     modify(&m) { (w) in
       swap(&w.syntaxToParent, &v.syntaxToParent)
       swap(&w.scopeToDeclarations, &v.scopeToDeclarations)
+      swap(&w.topLevelDeclarations, &v.topLevelDeclarations)
     }
     assert(m.syntax.count == v.syntaxToParent.count)
   }
@@ -26,16 +27,17 @@ public struct Scoper {
     var syntaxToParent: [Int]
 
     /// A table from scope to the declarations that it contains directly.
-    var scopeToDeclarations: [Int: [DeclarationIdentity]]
+    var scopeToDeclarations: [Int: [DeclarationIdentity]] = [:]
+
+    /// A table from identifiers to the corresponding top-level declaration.
+    var topLevelDeclarations: [String: DeclarationIdentity] = [:]
 
     /// The innermost lexical scope currently visited.
-    var innermostScope: Int
+    var innermostScope: Int = -1
 
     /// Creates an instance for computing the relationships of `m`.
     init(_ m: Module) {
       self.syntaxToParent = m.syntaxToParent
-      self.scopeToDeclarations = [:]
-      self.innermostScope = -1
     }
 
     mutating func willEnter(_ n: AnySyntaxIdentity, in module: Module) -> Bool {
@@ -44,6 +46,8 @@ public struct Scoper {
       if let m = module.castToDeclaration(n) {
         if innermostScope >= 0 {
           scopeToDeclarations[innermostScope]!.append(m)
+        } else if let decl = module[m] as? any IdentifierDeclaration {
+          topLevelDeclarations[decl.identifier] = m
         }
       }
 

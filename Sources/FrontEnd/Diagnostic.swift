@@ -1,3 +1,5 @@
+import struct Foundation.URL
+
 /// A diagnostic related to a region of Hylo source code.
 public struct Diagnostic: Error, Hashable, Sendable {
 
@@ -128,6 +130,16 @@ extension Module {
   /// Returns an error indicating that `n` is undefined.
   internal func undefinedSymbol(_ n: Name, at site: SourceSpan) -> Diagnostic {
     .init(.error, "undefined symbol '\(n)'", at: site)
+  }
+
+  internal func importCycle(_ paths: [FileName], at site: SourceSpan) -> Diagnostic {
+    var paths = paths
+    let first = paths.first!
+    paths.append(first)
+    let cyclePaths = paths.map { f in
+      f.gnuPath(relativeTo: URL.currentDirectory())!
+    }.joined(separator: "\n")
+    return .init(.error, "import cycle detected:\n\n\(cyclePaths)", at: site)
   }
 
 }

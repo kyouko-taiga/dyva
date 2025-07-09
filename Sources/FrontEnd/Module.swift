@@ -26,8 +26,7 @@ public struct Module: Sendable {
   internal var imports: [Import.ID] = []
 
   /// The resolved list of all imports by name.
-  internal var namesToImports: OrderedDictionary<Name, (importee: Name, module: Module.Identity)> =
-    [:]
+  internal var namesToImports: OrderedDictionary<Name, DeclarationIdentity> = [:]
 
   /// The root of the syntax trees in `self`, which may be subset of the top-level declarations.
   internal var roots: [AnySyntaxIdentity] = []
@@ -40,6 +39,9 @@ public struct Module: Sendable {
 
   /// A table from scope to the declarations that it contains directly.
   internal var scopeToDeclarations: [Int: [DeclarationIdentity]] = [:]
+
+  /// A table from identifiers to the corresponding top-level declaration.
+  internal var topLevelDeclarations: [String: DeclarationIdentity] = [:]
 
   /// The lowered functions in the module.
   internal var functions: OrderedDictionary<IRFunction.Name, IRFunction> = [:]

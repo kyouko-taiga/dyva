@@ -1,11 +1,15 @@
 /// The declaration of a function.
-public struct FunctionDeclaration: Declaration, Scope {
+public struct FunctionDeclaration: IdentifierDeclaration, Scope {
 
   /// The keyword introducing this declaration.
   public let introducer: Token
 
   /// The name of the function.
   public let name: Name
+
+  public var identifier: String {
+    name.identifier
+  }
 
   /// The parameters of the function.
   public let parameters: [ParameterDeclaration.ID]

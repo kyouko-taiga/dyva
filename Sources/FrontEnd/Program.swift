@@ -24,7 +24,6 @@ public struct Program {
 
   /// The list of source files being loaded.
   internal var loadingStack: [FileName] = []
-  internal var modulesCount: UInt32 = 0
 
   /// Adds the given source file in this program, loaded as the entry iff `isMain` is `true`.
   @discardableResult
@@ -36,8 +35,8 @@ public struct Program {
     } else {
       loadingStack.append(s.name)
       defer { let _ = loadingStack.popLast()! }
-      var m = Module(identity: modulesCount, isMain: isMain, source: s)
-      modulesCount += 1
+      var m = Module(identity: UInt32(modules.count), isMain: isMain, source: s)
+      modules[s.name] = m  // insert once, so we hold the ordering
 
       // Parse the file.
       do {
@@ -75,18 +74,19 @@ public struct Program {
             source = try .init(contentsOf: path)
           }
           if let index = loadingStack.lastIndex(of: source.name) {
-            var cycle = loadingStack[index...]
-            cycle.append(source.name)
-            let cyclePaths = cycle.map { f in
-              f.gnuPath(relativeTo: URL.currentDirectory())!
-            }.joined(separator: "\n")
-            m.addDiagnostic(
-              .init(.error, "import cycle detected:\n\n\(cyclePaths)", at: imp.site))
+            m.addDiagnostic(m.importCycle(Array(loadingStack[index...]), at: imp.site))
           }
           let (loaded, id) = load(source, asMain: false)
           guard loaded else { continue }
+          let imported = self[id]
           for binding in imp.bindings {
-            m.namesToImports[binding.name] = (binding.importee, id)
+            if let decl = imported.topLevelDeclarations[binding.importee.identifier] {
+              m.namesToImports[binding.name] = decl
+            } else {
+              m.addDiagnostic(
+                .init(
+                  .error, "unrecognized import \(binding.name) from \(source.name)", at: imp.site))
+            }
           }
         } catch let e {
           m.addDiagnostic(.init(.error, "cannot read import: \(e)", at: imp.site))
@@ -104,6 +104,7 @@ public struct Program {
       for f in m.functions.values.indices {
         print(m.show(f))
       }
+      print(m.topLevelDeclarations)
 
       modules[s.name] = m
 
