@@ -22,6 +22,12 @@ public struct Module: Sendable {
   /// A table from syntax tree to its tag.
   internal var syntaxToTag: [SyntaxTag] = []
 
+  /// The list of all (top-level) imports in `self`.
+  internal var imports: [Import.ID] = []
+
+  /// The resolved list of all imports by name.
+  internal var namesToImports: OrderedDictionary<Name, DeclarationIdentity> = [:]
+
   /// The root of the syntax trees in `self`, which may be subset of the top-level declarations.
   internal var roots: [AnySyntaxIdentity] = []
 
@@ -33,6 +39,9 @@ public struct Module: Sendable {
 
   /// A table from scope to the declarations that it contains directly.
   internal var scopeToDeclarations: [Int: [DeclarationIdentity]] = [:]
+
+  /// A table from identifiers to the corresponding top-level declaration.
+  internal var topLevelDeclarations: [String: DeclarationIdentity] = [:]
 
   /// The lowered functions in the module.
   internal var functions: OrderedDictionary<IRFunction.Name, IRFunction> = [:]
@@ -158,7 +167,6 @@ public struct Module: Sendable {
     ns.lazy.compactMap({ (n) in cast(n, to: t) })
   }
 
-
   /// Returns the innermost scope that strictly contains `n`.
   public func parent<T: SyntaxIdentity>(containing n: T) -> ScopeIdentity {
     assert(isScoped, "unscoped module")
@@ -228,7 +236,7 @@ public struct Module: Sendable {
 
   /// Adds an IR function with the given properties to this module and returns its identity.
   internal mutating func addFunction(
-    name: IRFunction.Name,  labels: [String?]
+    name: IRFunction.Name, labels: [String?]
   ) -> IRFunction.Identity {
     if let i = functions.index(forKey: name) {
       return i

@@ -1,5 +1,5 @@
 /// The declaration of a trait.
-public struct TraitDeclaration: Declaration, Scope {
+public struct TraitDeclaration: IdentifierDeclaration, Scope {
 
   /// The keyword introducing this declaration.
   public let introducer: Token

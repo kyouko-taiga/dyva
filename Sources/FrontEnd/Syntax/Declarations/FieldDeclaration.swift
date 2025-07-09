@@ -1,5 +1,5 @@
 /// The declaration of a field in a struct.
-public struct FieldDeclaration: Declaration {
+public struct FieldDeclaration: IdentifierDeclaration {
 
   /// The name of the field.
   public let identifier: String

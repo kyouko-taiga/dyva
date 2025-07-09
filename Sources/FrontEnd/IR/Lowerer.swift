@@ -30,20 +30,21 @@ public struct Lowerer {
     assert(module.functions.isEmpty)
 
     // If `m` is the entry, then the whole module is the definition of a function.
-    if module.isMain {
-      let main = module.addFunction(name: .main, labels: [])
+    // if module.isMain {
+    let main = module.addFunction(name: .main, labels: [])
 
-      insertionPoint = .end(module[main].appendBlock(parameterCount: 0))
-      push(Frame(scope: .init(module: module.identity), locals: [:]))
-      for s in module.roots {
-        assert(module.isStatement(s), "ill-formed syntax tree")
-        lower(StatementIdentity(uncheckedFrom: s))
-      }
-      pop()
+    insertionPoint = .end(module[main].appendBlock(parameterCount: 0))
+    push(Frame(scope: .init(module: module.identity), locals: [:]))
+    for s in module.roots {
+      assert(module.isStatement(s), "ill-formed syntax tree")
+      lower(StatementIdentity(uncheckedFrom: s))
     }
+    pop()
+    // }
 
     // Otherwise, `m` is a collection of top-level declarations.
-    else { todo() }
+    // else {
+    // }
   }
 
   // MARK: Declarations
@@ -162,7 +163,7 @@ public struct Lowerer {
   private mutating func lower(_ e: Call.ID) -> IRValue {
     let f = lower(module[e].callee)
     let l = module[e].arguments.map(\.label?.value)
-    let a = module[e].arguments.map({ (a) in lower(a.syntax)})
+    let a = module[e].arguments.map({ (a) in lower(a.syntax) })
     return _invoke(f, mapping: l, to: a, at: module[e].site)
   }
 
@@ -366,6 +367,11 @@ public struct Lowerer {
         }
       }
       s.append(frames.removeLast())
+    }
+
+    // Look for imports
+    if let decl = module.namesToImports[n] {
+      return .constant(.imported(ident: decl))
     }
 
     // Look for built-in symbols.

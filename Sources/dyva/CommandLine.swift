@@ -23,7 +23,8 @@ import Utilities
     }
 
     var program = Program()
-    try program.load(SourceFile(contentsOf: input), asMain: true)
+    let source = try SourceFile(contentsOf: input)
+    program.load(source, asMain: true)
 
     render(program.diagnostics)
     if program.containsError {
