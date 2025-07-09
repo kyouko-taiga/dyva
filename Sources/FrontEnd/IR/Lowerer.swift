@@ -31,16 +31,16 @@ public struct Lowerer {
 
     // If `m` is the entry, then the whole module is the definition of a function.
     // if module.isMain {
-      let main = module.addFunction(name: .main, labels: [])
+    let main = module.addFunction(name: .main, labels: [])
 
-      insertionPoint = .end(module[main].appendBlock(parameterCount: 0))
-      push(Frame(scope: .init(module: module.identity), locals: [:]))
-      for s in module.roots {
-        assert(module.isStatement(s), "ill-formed syntax tree")
-        lower(StatementIdentity(uncheckedFrom: s))
-      }
-      pop()
+    insertionPoint = .end(module[main].appendBlock(parameterCount: 0))
+    push(Frame(scope: .init(module: module.identity), locals: [:]))
+    for s in module.roots {
+      assert(module.isStatement(s), "ill-formed syntax tree")
+      lower(StatementIdentity(uncheckedFrom: s))
     }
+    pop()
+    // }
 
     // Otherwise, `m` is a collection of top-level declarations.
     // else {
