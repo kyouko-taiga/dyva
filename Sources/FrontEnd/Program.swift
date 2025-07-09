@@ -64,14 +64,15 @@ public struct Program {
       let cwd: URL
       switch s.name {
       case .local(let url):
-        cwd = url
+        var path = url
+        path.deleteLastPathComponent()
+        cwd = path
       case _:
         cwd = URL.currentDirectory()
       }
       for importID in m.imports {
         let imp = m[importID]
-        let path = URL.init(
-          fileURLWithPath: String(m[imp.source].string), relativeTo: cwd)
+        let path = cwd.appending(path: m[imp.source].string)
         var source: SourceFile
         do {
           if path.hasDirectoryPath {
