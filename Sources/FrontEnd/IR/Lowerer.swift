@@ -30,7 +30,7 @@ public struct Lowerer {
     assert(module.functions.isEmpty)
 
     // If `m` is the entry, then the whole module is the definition of a function.
-    if module.isMain {
+    // if module.isMain {
       let main = module.addFunction(name: .main, labels: [])
 
       insertionPoint = .end(module[main].appendBlock(parameterCount: 0))
@@ -43,7 +43,8 @@ public struct Lowerer {
     }
 
     // Otherwise, `m` is a collection of top-level declarations.
-    else { todo() }
+    // else {
+    // }
   }
 
   // MARK: Declarations
@@ -162,7 +163,7 @@ public struct Lowerer {
   private mutating func lower(_ e: Call.ID) -> IRValue {
     let f = lower(module[e].callee)
     let l = module[e].arguments.map(\.label?.value)
-    let a = module[e].arguments.map({ (a) in lower(a.syntax)})
+    let a = module[e].arguments.map({ (a) in lower(a.syntax) })
     return _invoke(f, mapping: l, to: a, at: module[e].site)
   }
 
