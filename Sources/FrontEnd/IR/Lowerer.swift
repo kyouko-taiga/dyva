@@ -369,6 +369,11 @@ public struct Lowerer {
       s.append(frames.removeLast())
     }
 
+    // Look for imports
+    if let (importee, mod) = module.namesToImports[n] {
+      return .constant(.imported(name: importee.identifier, from: mod))
+    }
+
     // Look for built-in symbols.
     switch n {
     case "print":

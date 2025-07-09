@@ -25,6 +25,10 @@ public struct Module: Sendable {
   /// The list of all (top-level) imports in `self`.
   internal var imports: [Import.ID] = []
 
+  /// The resolved list of all imports by name.
+  internal var namesToImports: OrderedDictionary<Name, (importee: Name, module: Module.Identity)> =
+    [:]
+
   /// The root of the syntax trees in `self`, which may be subset of the top-level declarations.
   internal var roots: [AnySyntaxIdentity] = []
 

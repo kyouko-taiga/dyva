@@ -22,6 +22,10 @@ public struct Program {
     modules.values.map(\.diagnostics).joined()
   }
 
+  /// The list of source files being loaded.
+  internal var loadingStack: [FileName] = []
+  internal var modulesCount: UInt32 = 0
+
   /// Adds the given source file in this program, loaded as the entry iff `isMain` is `true`.
   @discardableResult
   public mutating func load(
@@ -30,7 +34,10 @@ public struct Program {
     if let m = modules.index(forKey: s.name) {
       return (inserted: false, identity: UInt32(m))
     } else {
-      var m = Module(identity: UInt32(modules.count), isMain: isMain, source: s)
+      loadingStack.append(s.name)
+      defer { let _ = loadingStack.popLast()! }
+      var m = Module(identity: modulesCount, isMain: isMain, source: s)
+      modulesCount += 1
 
       // Parse the file.
       do {
@@ -47,19 +54,6 @@ public struct Program {
         return (inserted: true, identity: m.identity)
       }
 
-      // Assign scopes.
-      let scoper = Scoper()
-      scoper.visit(&m)
-
-      // Lower to IR.
-      var lowerer = Lowerer()
-      lowerer.visit(&m)
-
-      for f in m.functions.values.indices {
-        print(m.show(f))
-      }
-
-      modules[s.name] = m
       // load the imported modules
       let cwd: URL
       switch s.name {
@@ -80,11 +74,39 @@ public struct Program {
           } else {
             source = try .init(contentsOf: path)
           }
-          load(source, asMain: false)
+          if let index = loadingStack.lastIndex(of: source.name) {
+            var cycle = loadingStack[index...]
+            cycle.append(source.name)
+            let cyclePaths = cycle.map { f in
+              f.gnuPath(relativeTo: URL.currentDirectory())!
+            }.joined(separator: "\n")
+            m.addDiagnostic(
+              .init(.error, "import cycle detected:\n\n\(cyclePaths)", at: imp.site))
+          }
+          let (loaded, id) = load(source, asMain: false)
+          guard loaded else { continue }
+          for binding in imp.bindings {
+            m.namesToImports[binding.name] = (binding.importee, id)
+          }
         } catch let e {
-          modules[s.name]!.addDiagnostic(.init(.error, "cannot read import: \(e)", at: imp.site))
+          m.addDiagnostic(.init(.error, "cannot read import: \(e)", at: imp.site))
         }
       }
+
+      // Assign scopes.
+      let scoper = Scoper()
+      scoper.visit(&m)
+
+      // Lower to IR.
+      var lowerer = Lowerer()
+      lowerer.visit(&m)
+
+      for f in m.functions.values.indices {
+        print(m.show(f))
+      }
+
+      modules[s.name] = m
+
       return (inserted: true, identity: m.identity)
     }
   }
