@@ -5,7 +5,6 @@ import Utilities
 /// A Dyva program.
 public struct Program {
 
-
   /// The modules in the program.
   internal private(set) var modules = OrderedDictionary<FileName, Module>()
 
