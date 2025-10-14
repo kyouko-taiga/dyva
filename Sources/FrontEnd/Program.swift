@@ -1,6 +1,7 @@
-import struct Foundation.URL
 import OrderedCollections
 import Utilities
+
+import struct Foundation.URL
 
 /// A Dyva program.
 public struct Program {
@@ -21,6 +22,9 @@ public struct Program {
     modules.values.map(\.diagnostics).joined()
   }
 
+  /// The list of source files being loaded.
+  internal var loadingStack: [FileName] = []
+
   /// Adds the given source file in this program, loaded as the entry iff `isMain` is `true`.
   @discardableResult
   public mutating func load(
@@ -29,7 +33,10 @@ public struct Program {
     if let m = modules.index(forKey: s.name) {
       return (inserted: false, identity: UInt32(m))
     } else {
+      loadingStack.append(s.name)
+      defer { let _ = loadingStack.popLast()! }
       var m = Module(identity: UInt32(modules.count), isMain: isMain, source: s)
+      modules[s.name] = m  // insert once, so we hold the ordering
 
       // Parse the file.
       do {
@@ -42,7 +49,48 @@ public struct Program {
 
       // Bail out if there was a parse error.
       guard !m.containsError else {
+        modules[s.name] = m
         return (inserted: true, identity: m.identity)
+      }
+
+      // load the imported modules
+      let cwd: URL
+      switch s.name {
+      case .local(let url):
+        var path = url
+        path.deleteLastPathComponent()
+        cwd = path
+      case _:
+        cwd = URL.currentDirectory()
+      }
+      for importID in m.imports {
+        let imp = m[importID]
+        let path = cwd.appending(path: m[imp.source].string)
+        var source: SourceFile
+        do {
+          if path.hasDirectoryPath {
+            source = try .init(contentsOf: path.appending(components: "index.dyva"))
+          } else {
+            source = try .init(contentsOf: path)
+          }
+          if let index = loadingStack.lastIndex(of: source.name) {
+            m.addDiagnostic(m.importCycle(Array(loadingStack[index...]), at: imp.site))
+          }
+          let (loaded, id) = load(source, asMain: false)
+          guard loaded else { continue }
+          let imported = self[id]
+          for binding in imp.bindings {
+            if let decl = imported.topLevelDeclarations[binding.importee.identifier] {
+              m.namesToImports[binding.name] = decl
+            } else {
+              m.addDiagnostic(
+                .init(
+                  .error, "unrecognized import \(binding.name) from \(source.name)", at: imp.site))
+            }
+          }
+        } catch let e {
+          m.addDiagnostic(.init(.error, "cannot read import: \(e)", at: imp.site))
+        }
       }
 
       // Assign scopes.
@@ -56,8 +104,10 @@ public struct Program {
       for f in m.functions.values.indices {
         print(m.show(f))
       }
+      print(m.topLevelDeclarations)
 
       modules[s.name] = m
+
       return (inserted: true, identity: m.identity)
     }
   }
@@ -70,7 +120,7 @@ public struct Program {
   }
 
   /// Projects the module identified by `m`.
-  internal subscript(m: Module.Identity) -> Module {
+  public subscript(m: Module.Identity) -> Module {
     get {
       modules.values[Int(m)]
     }

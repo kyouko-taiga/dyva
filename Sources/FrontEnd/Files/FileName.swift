@@ -26,8 +26,8 @@ public enum FileName: Hashable, Sendable {
   /// Returns a textual description of `self`'s path relative to `base`.
   public func gnuPath(relativeTo base: URL) -> String? {
     guard base.isFileURL, case .local(let path) = self else { return nil }
-    let source = path.standardized.pathComponents
-    let prefix = base.standardized.pathComponents
+    let source = path.standardizedFileURL.pathComponents
+    let prefix = base.standardizedFileURL.pathComponents
 
     // Identify the end of the common prefix.
     var i = 0
@@ -61,8 +61,8 @@ extension FileName: CustomStringConvertible {
 
   public var description: String {
     switch self {
-    case .local(let p):
-      return p.relativePath
+    case .local(_):
+      return gnuPath(relativeTo: URL.currentDirectory())!
     case .virtual(let i):
       return "virtual://\(String(UInt(bitPattern: i), radix: 36))"
     }

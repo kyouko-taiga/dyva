@@ -1,5 +1,5 @@
 /// The declaration of a variable in a pattern binding.
-public struct VariableDeclaration: Declaration, Pattern {
+public struct VariableDeclaration: IdentifierDeclaration, Pattern {
 
   /// The identifier of the declared variable.
   public let identifier: String

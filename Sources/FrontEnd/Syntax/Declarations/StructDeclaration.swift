@@ -1,5 +1,5 @@
 /// The declaration of a struct.
-public struct StructDeclaration: Declaration, Scope {
+public struct StructDeclaration: IdentifierDeclaration, Scope {
 
   /// The keyword introducing this declaration.
   public let introducer: Token

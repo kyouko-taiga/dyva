@@ -74,7 +74,7 @@ public struct AnySyntaxIdentity {
 
   /// The offset of the node represented by `self` in its containing collection.
   public var offset: Int {
-    .init(bits & 0xffffffff)
+    .init(bits & 0xffff_ffff)
   }
 
 }

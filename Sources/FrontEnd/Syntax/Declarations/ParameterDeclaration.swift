@@ -1,5 +1,5 @@
 /// The declaration of a function parameter.
-public struct ParameterDeclaration: Declaration {
+public struct ParameterDeclaration: IdentifierDeclaration {
 
   /// The label of the parameter, if any.
   public let label: String?
