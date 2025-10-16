@@ -7,7 +7,7 @@ public enum IRValue: Hashable, Sendable {
   case register(InstructionIdentity)
 
   /// The i-th parameter of a basic block.
-  case parameter(BasicBlockIdentity, Int)
+  case parameter(BasicBlock.ID, Int)
 
   /// A constant value.
   case constant(IRConstant)

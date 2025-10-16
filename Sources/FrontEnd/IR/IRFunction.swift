@@ -23,8 +23,11 @@ public struct IRFunction: Sendable {
   /// The argument labels of the function.
   public let labels: [String?]
 
+  /// The instructions in the function.
+  public private(set) var instructions: List<any Instruction>
+
   /// The basic blocks in the function, the first of which being the function's entry.
-  public private(set) var blocks: List<BasicBlock>
+  public private(set) var blocks: [BasicBlock]
 
   /// The def-use chains of the values in this module.
   public private(set) var uses: [IRValue: [Use]] = [:]
@@ -33,6 +36,7 @@ public struct IRFunction: Sendable {
   public init(identity: Identity, labels: [String?]) {
     self.identity = identity
     self.labels = labels
+    self.instructions = []
     self.blocks = []
   }
 
@@ -46,60 +50,61 @@ public struct IRFunction: Sendable {
     blocks.first
   }
 
+  /// Returns the last instruction of `b`, if any.
+  public func last(of b: BasicBlock.ID) -> (any Instruction)? {
+    blocks[b].last.map({ (i) in instructions[i] })
+  }
+
+  /// Returns the instructions of `b`.
+  public func contents(of b: BasicBlock.ID) -> some Sequence<InstructionIdentity> {
+    var next = blocks[b].first
+    let last = blocks[b].last
+    return AnyIterator {
+      if let n = next {
+        next = (n != last) ? instructions.address(after: n) : nil
+        return n
+      } else {
+        return nil
+      }
+    }
+  }
+
   /// Appends a basic block taking `n` parameters to this function.
   @discardableResult
-  public mutating func appendBlock(parameterCount n: Int) -> BasicBlockIdentity {
-    .init(function: identity, address: blocks.append(.init(parameterCount: n)))
+  public mutating func appendBlock(parameterCount n: Int) -> BasicBlock.ID {
+    let b = blocks.count
+    blocks.append(.init(parameterCount: n))
+    return b
   }
 
-  /// Inserts instruction `i` into `self` at boundary `p` and returns its identity.
-  public mutating func insert<T: Instruction>(
-    _ i: T, at p: InsertionPoint
-  ) -> InstructionIdentity {
-    switch p {
-    case .start(let b):
-      return prepend(i, to: b)
-    case .end(let b):
-      return append(i, to: b)
-    case .after(let j):
-      return insert(i, after: j)
-    }
-  }
-
-  /// Inserts `newInstruction` after `predecessor` and returns its identity.
+  /// Adds `instruction` at the end of `b` and returns its identity.
   @discardableResult
-  mutating func insert(
-    _ i: Instruction, after p: InstructionIdentity
-  ) -> InstructionIdentity {
-    insert(i) { (me, i) in
-      InstructionIdentity(
-        block: p.block,
-        address: me.blocks[p.block.address].instructions.insert(i, after: p.address))
-    }
-  }
-
-  /// Adds `i` at the end of `b` and returns its identity.
   public mutating func append<T: Instruction>(
-    _ i: T, to b: BasicBlockIdentity
+    _ instruction: T, to b: BasicBlock.ID
   ) -> InstructionIdentity {
-    insert(i) { (me, i) in
-      InstructionIdentity(block: b, address: me.blocks[b.address].instructions.append(i))
+    assert(!(last(of: b)?.isTerminator ?? false), "insertion after terminator")
+    return insert(instruction) { (me, i) in
+      let id = me.instructions.append(i)
+      me.blocks[b].setLast(id)
+      return id
     }
   }
-
 
   /// Adds `instruction` at the start of `b` and returns its identity.
+  @discardableResult
   public mutating func prepend<T: Instruction>(
-    _ i: T, to b: BasicBlockIdentity
+    _ instruction: T, to b: BasicBlock.ID
   ) -> InstructionIdentity {
-    insert(i) { (me, i) -> InstructionIdentity in
-      InstructionIdentity(block: b, address: me.blocks[b.address].instructions.prepend(i))
+    insert(instruction) { (me, i) in
+      let id = me.instructions.prepend(i)
+      me.blocks[b].setFirst(id)
+      return id
     }
   }
 
   /// Inserts `instruction` with `impl` and returns its identity.
   private mutating func insert<T: Instruction>(
-    _ instruction: T, with impl: (inout Self, any Instruction) -> InstructionIdentity
+    _ instruction: T, with impl: (inout Self, T) -> InstructionIdentity
   ) -> InstructionIdentity {
     // Insert the instruction.
     let user = impl(&self, instruction)

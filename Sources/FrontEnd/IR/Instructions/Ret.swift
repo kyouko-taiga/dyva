@@ -21,7 +21,7 @@ extension IR {
     }
 
     /// The basic blocks to which control flow may transfer.
-    public var successors: [BasicBlockIdentity] { [] }
+    public var successors: [BasicBlock.ID] { [] }
   }
 
 }

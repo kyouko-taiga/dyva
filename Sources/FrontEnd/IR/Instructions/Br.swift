@@ -7,13 +7,13 @@ extension IR {
     public let operands: [IRValue]
 
     /// The basic blocks to which control flow may transfer.
-    public let successors: [BasicBlockIdentity]
+    public let successors: [BasicBlock.ID]
 
     /// The site to which `self` is attached.
     public let anchor: SourceSpan
 
     /// Creates an instance with the given properties.
-    public init(target: BasicBlockIdentity, arguments: [IRValue], anchor: SourceSpan) {
+    public init(target: BasicBlock.ID, arguments: [IRValue], anchor: SourceSpan) {
       self.operands = arguments
       self.successors = [target]
       self.anchor = anchor
@@ -25,7 +25,7 @@ extension IR {
     }
 
     /// The target of the jump.
-    public var target: BasicBlockIdentity {
+    public var target: BasicBlock.ID {
       successors[0]
     }
 

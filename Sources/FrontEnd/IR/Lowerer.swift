@@ -3,18 +3,15 @@ import Utilities
 /// The lowering of a Dyva module into IR.
 public struct Lowerer {
 
-  /// Where new instructions are inserted.
-  private var insertionPoint: InsertionPoint?
-
-  private var frames: [Frame]
+  /// The current insertion context.
+  private var insertionContext: InsertionContext
 
   /// The module being lowered.
   private var module: Module!
 
   /// Creates an instance.
   public init() {
-    self.insertionPoint = nil
-    self.frames = []
+    self.insertionContext = .init()
     self.module = nil
   }
 
@@ -31,15 +28,17 @@ public struct Lowerer {
 
     // If `m` is the entry, then the whole module is the definition of a function.
     if module.isMain {
-      let main = module.addFunction(name: .main, labels: [])
+      let f = module.addFunction(name: .main, labels: [])
 
-      insertionPoint = .end(module[main].appendBlock(parameterCount: 0))
+      insertionContext.function = module[f]
+      insertionContext.point = .end(of: insertionContext.function!.appendBlock(parameterCount: 0))
       push(Frame(scope: .init(module: module.identity), locals: [:]))
       for s in module.roots {
         assert(module.isStatement(s), "ill-formed syntax tree")
         lower(StatementIdentity(uncheckedFrom: s))
       }
       pop()
+      module[f] = insertionContext.function.sink()
     }
 
     // Otherwise, `m` is a collection of top-level declarations.
@@ -109,17 +108,19 @@ public struct Lowerer {
       todo()
     }
 
-    let entry = module[f].appendBlock(parameterCount: module[d].parameters.count)
+    insertionContext.function = module[f]
+    let entry = insertionContext.function!.appendBlock(parameterCount: module[d].parameters.count)
+
+    insertionContext.point = .end(of: entry)
     var ls: [Name: IRValue] = [:]
     for (i, p) in module[d].parameters.enumerated() {
       ls[Name(identifier: module[p].identifier)] = .parameter(entry, i)
     }
 
     push(Frame(scope: .init(node: d), locals: ls))
-    at(.end(entry)) { (me) in
-      me.lower(body: body)
-    }
+    lower(body: body)
     pop()
+    module[f] = insertionContext.function.sink()
   }
 
   /// Lowers the statements in `body`, which form the body of a function.
@@ -128,7 +129,7 @@ public struct Lowerer {
       let v = lower(e)
       _ret(v, at: .empty(at: module[e].site.end))
     } else {
-      for s in body { lower(s) }
+      lower(block: body)
     }
   }
 
@@ -148,6 +149,8 @@ public struct Lowerer {
       return lower(module.castUnchecked(e, to: IntegerLiteral.self))
     case NameExpression.self:
       return lower(module.castUnchecked(e, to: NameExpression.self))
+    case StringLiteral.self:
+      return lower(module.castUnchecked(e, to: StringLiteral.self))
     default:
       module.unexpected(e)
     }
@@ -171,17 +174,17 @@ public struct Lowerer {
     let (success, failure) = lower(conditions: module[e].conditions)
     let tail = (module[e].failure != nil) ? appendBlock(parameterCount: 1) : failure
 
-    insertionPoint = .end(success)
+    insertionContext.point = .end(of: success)
     let v = lower(module[e].success)
     _br(tail, [v], at: module[e].site)
 
-    insertionPoint = .end(failure)
+    insertionContext.point = .end(of: failure)
     if let b = module[e].failure {
       let w = lower(b)
       _br(tail, [w], at: module[e].site)
     }
 
-    insertionPoint = .end(tail)
+    insertionContext.point = .end(of: tail)
     return .parameter(tail, 0)
   }
 
@@ -189,7 +192,7 @@ public struct Lowerer {
   /// if all conditions are satisifed and `f` is where control-flow jumps otherwise.
   private mutating func lower(
     conditions: [ConditionIdentity]
-  ) -> (success: BasicBlockIdentity, failure: BasicBlockIdentity) {
+  ) -> (success: BasicBlock.ID, failure: BasicBlock.ID) {
     let failure = appendBlock(parameterCount: 0)
 
     for c in conditions {
@@ -200,11 +203,11 @@ public struct Lowerer {
         let b = lower(e)
         let n = appendBlock(parameterCount: 0)
         _ = _condbr(if: b, then: n, else: failure, at: module[c].site)
-        insertionPoint = .end(n)
+        insertionContext.point = .end(of: n)
       }
     }
 
-    return (success: insertionPoint!.block, failure: failure)
+    return (success: insertionContext.point!.block, failure: failure)
   }
 
   /// Lowers `s` to IR, returning the value of the branch.
@@ -241,7 +244,7 @@ public struct Lowerer {
 
     // Otherwise, returns the result of unqualified name lookup.
     else if let v = lookup(unqualified: n) {
-      return v.isConstant ? v : _access(v, at: module[e].site)
+      return v
     }
 
     // Undefined symbol.
@@ -252,7 +255,20 @@ public struct Lowerer {
     }
   }
 
+  /// Lowers `e` to IR and returns its value.
+  private mutating func lower(_ e: StringLiteral.ID) -> IRValue {
+    .constant(.string(String(module[e].value)))
+  }
+
   // MARK: Statements
+
+  /// Lowers `block`, which is a list of statements to be executed in sequence.
+  private mutating func lower(block: [StatementIdentity]) {
+    for s in block {
+      lower(s)
+      if module.isBreakingControl(s) { break }
+    }
+  }
 
   /// Lowers `s` to IR.
   private mutating func lower(_ s: StatementIdentity) {
@@ -299,6 +315,20 @@ public struct Lowerer {
 
   // MARK: Helpers
 
+  /// The context in which instructions are inserted.
+  private struct InsertionContext {
+
+    /// A stack of frames keeping track of local symbols in traversed lexical scope.
+    var frames: [Frame] = []
+
+    /// The function in which new instructions are inserted.
+    var function: IRFunction? = nil
+
+    /// Where new instructions are inserted in `function`.
+    var point: InsertionPoint? = nil
+
+  }
+
   /// Information about a lexical scope.
   private struct Frame {
 
@@ -313,10 +343,10 @@ public struct Lowerer {
   /// The symbol table of the top frame.
   private var locals: [Name: IRValue] {
     get {
-      frames[frames.count - 1].locals
+      insertionContext.frames[insertionContext.frames.count - 1].locals
     }
     _modify {
-      yield &frames[frames.count - 1].locals
+      yield &insertionContext.frames[insertionContext.frames.count - 1].locals
     }
   }
 
@@ -324,48 +354,47 @@ public struct Lowerer {
   /// been moved to `p`.
   private mutating func at<T>(_ p: InsertionPoint, _ action: (inout Self) -> T) -> T {
     var q = p as Optional
-    swap(&q, &insertionPoint)
+    swap(&q, &insertionContext.point)
     let r = action(&self)
-    swap(&q, &insertionPoint)
+    swap(&q, &insertionContext.point)
     return r
   }
 
   /// Pushes `f` onto the stack.
   private mutating func push(_ f: Frame) {
-    frames.append(f)
+    insertionContext.frames.append(f)
   }
 
   /// Pops the top of the stack.
   private mutating func pop() {
-    frames.removeLast()
+    insertionContext.frames.removeLast()
   }
 
   /// Appends a basic block taking `n` parameters at the end of the function containing the current
   /// insertion point.
-  private mutating func appendBlock(parameterCount n: Int) -> BasicBlockIdentity {
-    let current = insertionPoint!.function
-    return module[current].appendBlock(parameterCount: n)
+  private mutating func appendBlock(parameterCount n: Int) -> BasicBlock.ID {
+    insertionContext.function!.appendBlock(parameterCount: n)
   }
 
   /// Returns the identities of the symbols bound to `n` in the current context, if any.
   private mutating func lookup(unqualified n: Name) -> IRValue? {
     // Look in symbol tables.
-    for f in frames.reversed() {
+    for f in insertionContext.frames.reversed() {
       if let i = f.locals[n] { return i }
     }
 
     // Look for function declarations not yet processed.
-    var s: [Frame] = .init(minimumCapacity: frames.count)
-    defer { frames.append(contentsOf: s.reversed()) }
+    var s: [Frame] = .init(minimumCapacity: insertionContext.frames.count)
+    defer { insertionContext.frames.append(contentsOf: s.reversed()) }
 
-    while !frames.isEmpty {
-      for d in module.declarations(lexicallyIn: frames.last!.scope) {
+    while !insertionContext.frames.isEmpty {
+      for d in module.declarations(lexicallyIn: insertionContext.frames.last!.scope) {
         if let c = module.cast(d, to: FunctionDeclaration.self), module[c].name == n {
           lower(c)
-          return frames.last!.locals[n]
+          return insertionContext.frames.last!.locals[n]
         }
       }
-      s.append(frames.removeLast())
+      s.append(insertionContext.frames.removeLast())
     }
 
     // Look for built-in symbols.
@@ -400,76 +429,62 @@ public struct Lowerer {
 
   // MARK: Instructions
 
-  private mutating func _access(
-    _ source: IRValue, at anchor: SourceSpan
-  ) -> IRValue {
-    let i = module[insertionPoint!.function].insert(
-      IR.Access(source: source, anchor: anchor),
-      at: insertionPoint!)
-    return .register(i)
+  /// Inserts `instruction` into `self.module` at `self.insertionContext.point` and returns its
+  /// result the register assigned by `instruction`, if any.
+  @discardableResult
+  private mutating func insert<T: Instruction>(_ instruction: T) -> IRValue {
+    modify(&insertionContext.function!) { [p = insertionContext.point!] (f) in
+      switch p {
+      case .start(let b):
+        return .register(f.prepend(instruction, to: b))
+      case .end(let b):
+        return .register(f.append(instruction, to: b))
+      }
+    }
   }
 
   private mutating func _alloc(at anchor: SourceSpan) -> IRValue {
-    let i = module[insertionPoint!.function].insert(IR.Alloc(anchor: anchor), at: insertionPoint!)
-    return .register(i)
+    insert(IR.Alloc(anchor: anchor))
   }
 
   @discardableResult
   private mutating func _br(
-    _ target: BasicBlockIdentity, _ arguments: [IRValue], at anchor: SourceSpan
+    _ target: BasicBlock.ID, _ arguments: [IRValue], at anchor: SourceSpan
   ) -> IRValue {
-    let i = module[insertionPoint!.function].insert(
-      IR.Br(target: target, arguments: arguments, anchor: anchor),
-      at: insertionPoint!)
-    return .register(i)
+    insert(IR.Br(target: target, arguments: arguments, anchor: anchor))
   }
 
   @discardableResult
   private mutating func _condbr(
-    if condition: IRValue, then success: BasicBlockIdentity, else failure: BasicBlockIdentity,
+    if condition: IRValue, then success: BasicBlock.ID, else failure: BasicBlock.ID,
     at anchor: SourceSpan
   ) -> IRValue {
-    let i = module[insertionPoint!.function].insert(
-      IR.CondBr(condition: condition, success: success, failure: failure, anchor: anchor),
-      at: insertionPoint!)
-    return .register(i)
+    insert(IR.CondBr(condition: condition, success: success, failure: failure, anchor: anchor))
   }
 
   private mutating func _invoke(
     _ callee: IRValue, mapping labels: [String?], to arguments: [IRValue],
     at anchor: SourceSpan
   ) -> IRValue {
-    let i = module[insertionPoint!.function].insert(
-      IR.Invoke(callee: callee, labels: labels, arguments: arguments, anchor: anchor),
-      at: insertionPoint!)
-    return .register(i)
+    insert(IR.Invoke(callee: callee, labels: labels, arguments: arguments, anchor: anchor))
   }
 
   private mutating func _member(
     _ member: IR.Member.NameOrIndex, of whole: IRValue, at anchor: SourceSpan
   ) -> IRValue {
-    let i = module[insertionPoint!.function].insert(
-      IR.Member(whole: whole, member: member, anchor: anchor),
-      at: insertionPoint!)
-    return .register(i)
+    insert(IR.Member(whole: whole, member: member, anchor: anchor))
   }
 
   @discardableResult
   private mutating func _ret(_ value: IRValue, at anchor: SourceSpan) -> IRValue {
-    let i = module[insertionPoint!.function].insert(
-      IR.Ret(value: value, anchor: anchor),
-      at: insertionPoint!)
-    return .register(i)
+    insert(IR.Ret(value: value, anchor: anchor))
   }
 
   @discardableResult
   private mutating func _store(
     _ value: IRValue, to target: IRValue, at anchor: SourceSpan
   ) -> IRValue {
-    let i = module[insertionPoint!.function].insert(
-      IR.Store(value: value, target: target, anchor: anchor),
-      at: insertionPoint!)
-    return .register(i)
+    insert(IR.Store(value: value, target: target, anchor: anchor))
   }
 
 }

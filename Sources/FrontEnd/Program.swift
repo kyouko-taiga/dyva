@@ -31,6 +31,7 @@ public struct Program {
       return (inserted: false, identity: UInt32(m))
     } else {
       var m = Module(identity: UInt32(modules.count), isMain: isMain, source: s)
+      defer { modules[s.name] = m }
 
       // Parse the file.
       do {
@@ -55,11 +56,6 @@ public struct Program {
       var lowerer = Lowerer()
       lowerer.visit(&m)
 
-      for f in m.functions.values.indices {
-        print(m.show(f))
-      }
-
-      modules[s.name] = m
       return (inserted: true, identity: m.identity)
     }
   }
@@ -72,7 +68,7 @@ public struct Program {
   }
 
   /// Projects the module identified by `m`.
-  internal subscript(m: Module.Identity) -> Module {
+  public subscript(m: Module.Identity) -> Module {
     get {
       modules.values[Int(m)]
     }

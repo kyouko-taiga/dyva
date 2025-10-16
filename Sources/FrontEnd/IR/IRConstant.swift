@@ -10,6 +10,9 @@ public enum IRConstant: Hashable, Sendable {
   /// A 64-bit signed integer.
   case i64(Int64)
 
+  /// A constrant string.
+  case string(String)
+
   /// A free function.
   case function(IRFunction.Identity)
 
@@ -31,6 +34,8 @@ extension IRConstant: CustomStringConvertible {
       return b.description
     case .i64(let n):
       return "i64 \(n)"
+    case .string(let s):
+      return "string \"\(s)\""
     case .function(let n):
       return "<function(\(n))>"
     case .print:

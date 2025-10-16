@@ -11,6 +11,11 @@ public protocol Instruction: Showable, Sendable {
 
 extension Instruction {
 
+  /// `true` iff `self` is a terminator instruction.
+  public var isTerminator: Bool {
+    self is any Terminator
+  }
+
   public var operands: [IRValue] {
     []
   }

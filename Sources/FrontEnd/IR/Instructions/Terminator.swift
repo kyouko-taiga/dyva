@@ -2,6 +2,6 @@
 protocol Terminator: Instruction {
 
   /// The basic blocks to which control flow may transfer.
-  var successors: [BasicBlockIdentity] { get }
+  var successors: [BasicBlock.ID] { get }
 
 }

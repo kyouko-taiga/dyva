@@ -91,6 +91,16 @@ public struct Module: Sendable {
     tag(of: n).value is any Scope.Type
   }
 
+  /// Returns `true` iff `n` denotes a statement that unconditionally redirects control flow.
+  public func isBreakingControl<T: SyntaxIdentity>(_ n: T) -> Bool {
+    switch tag(of: n) {
+    case Break.self, Continue.self, Return.self:
+      return true
+    default:
+      return false
+    }
+  }
+
   /// Returns `n` if it identifies a node of type `U`; otherwise, returns `nil`.
   public func cast<T: SyntaxIdentity, U: Syntax>(_ n: T, to: U.Type) -> U.ID? {
     if tag(of: n) == .init(U.self) {
@@ -291,13 +301,11 @@ public struct Module: Sendable {
 
     // Otherwise, renders the basic blocks.
     result.write(" =\n")
-    for b in function.blocks.addresses {
-      let bb = BasicBlockIdentity(function: n, address: b)
-
+    for b in function.blocks.indices {
       result.write("  b\(b) =\n")
-      for s in function.blocks[b].instructions.addresses {
-        let r = IRValue.register(.init(block: bb, address: s))
-        let v = function.blocks[b].instructions[s].show(using: self)
+      for s in function.contents(of: b) {
+        let r = IRValue.register(s)
+        let v = function.instructions[s].show(using: self)
         result.write("    \(r) = \(v)\n")
       }
     }
@@ -314,6 +322,13 @@ extension Module: CustomStringConvertible {
     roots.reduce(into: "") { (o, t) in
       o.write(show(t))
       o.write("\n")
+    }
+  }
+
+  /// Returns a textual description of the module's lowered representation.
+  public var ir: String {
+    functions.values.indices.reduce(into: "") { (o, f) in
+      o.write(show(f))
     }
   }
 
