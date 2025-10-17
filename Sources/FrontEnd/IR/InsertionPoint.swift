@@ -1,6 +1,7 @@
 /// Where an instruction should be inserted in a basic block.
 public enum InsertionPoint: Hashable, Sendable {
 
+  /// The start of a basic block.
   case start(of: BasicBlock.ID)
 
   /// The end of a basic block.

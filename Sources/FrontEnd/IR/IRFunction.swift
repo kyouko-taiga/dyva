@@ -23,21 +23,26 @@ public struct IRFunction: Sendable {
   /// The argument labels of the function.
   public let labels: [String?]
 
-  /// The instructions in the function.
-  public private(set) var instructions: List<any Instruction>
-
   /// The basic blocks in the function, the first of which being the function's entry.
   public private(set) var blocks: [BasicBlock]
 
+  /// The instructions in the function.
+  public private(set) var instructions: List<any Instruction>
+
+  /// A map from an instruction to the basic block in which it resides.
+  public private(set) var container: [InstructionIdentity: BasicBlock.ID]
+
   /// The def-use chains of the values in this module.
-  public private(set) var uses: [IRValue: [Use]] = [:]
+  public private(set) var uses: [IRValue: [Use]]
 
   /// Creates a function that has the given `identity` and that accepts arguments with `labels`.
   public init(identity: Identity, labels: [String?]) {
     self.identity = identity
     self.labels = labels
-    self.instructions = []
     self.blocks = []
+    self.instructions = []
+    self.container = [:]
+    self.uses = [:]
   }
 
   /// `true` iff `self` has an entry block.
@@ -69,6 +74,19 @@ public struct IRFunction: Sendable {
     }
   }
 
+  /// Returns the control flow graph of this function.
+  func controlFlow() -> ControlFlowGraph {
+    var g = ControlFlowGraph()
+    for a in blocks.indices {
+      if let s = blocks[a].last, let i = instructions[s] as? any Terminator {
+        for b in i.successors {
+          g.define(a, predecessorOf: b)
+        }
+      }
+    }
+    return g
+  }
+
   /// Appends a basic block taking `n` parameters to this function.
   @discardableResult
   public mutating func appendBlock(parameterCount n: Int) -> BasicBlock.ID {
@@ -84,9 +102,10 @@ public struct IRFunction: Sendable {
   ) -> InstructionIdentity {
     assert(!(last(of: b)?.isTerminator ?? false), "insertion after terminator")
     return insert(instruction) { (me, i) in
-      let id = me.instructions.append(i)
-      me.blocks[b].setLast(id)
-      return id
+      let s = me.instructions.append(i)
+      me.container[s] = b
+      me.blocks[b].setLast(s)
+      return s
     }
   }
 
@@ -96,9 +115,10 @@ public struct IRFunction: Sendable {
     _ instruction: T, to b: BasicBlock.ID
   ) -> InstructionIdentity {
     insert(instruction) { (me, i) in
-      let id = me.instructions.prepend(i)
-      me.blocks[b].setFirst(id)
-      return id
+      let s = me.instructions.prepend(i)
+      me.container[s] = b
+      me.blocks[b].setFirst(s)
+      return s
     }
   }
 

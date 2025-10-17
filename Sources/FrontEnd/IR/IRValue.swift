@@ -25,6 +25,16 @@ public enum IRValue: Hashable, Sendable {
     }
   }
 
+  /// The identity of the instruction that defines this operand, if any.
+  public var instruction: InstructionIdentity? {
+    switch self {
+    case .register(let s):
+      return s
+    default:
+      return nil
+    }
+  }
+
 }
 
 extension IRValue: CustomStringConvertible {
