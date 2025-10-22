@@ -1,16 +1,16 @@
 import Utilities
 
 /// An instruction marking the entry into a region within an IR function.
-public protocol RegionEntry: Instruction {}
+public protocol IRRegionEntry: Instruction {}
 
-extension RegionEntry {
+extension IRRegionEntry {
 
-  public typealias End = RegionEnd<Self>
+  public typealias End = IRRegionEnd<Self>
 
 }
 
 /// The exit of a region.
-public struct RegionEnd<T: RegionEntry>: Instruction {
+public struct IRRegionEnd<T: IRRegionEntry>: Instruction {
 
   /// The operands of the instruction.
   public let operands: [IRValue]
@@ -31,7 +31,7 @@ public struct RegionEnd<T: RegionEntry>: Instruction {
 
 }
 
-extension RegionEnd: Showable {
+extension IRRegionEnd: Showable {
 
   public func show(using module: Module) -> String {
     "end \(start)"

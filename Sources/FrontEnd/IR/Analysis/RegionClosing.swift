@@ -10,7 +10,7 @@ extension IRFunction {
 
   private mutating func close(_ i: InstructionIdentity) {
     switch self.instructions[i] {
-    case _ as IRAccess:
+    case is IRAccess:
       let r = extendedLiveRange(of: .register(i))
       if r.isEmpty {
         remove(i)
@@ -152,22 +152,22 @@ extension IRFunction {
   /// Closes the access formed by `i`, which is an instance of `T`, at the boundaries of `r`.
   ///
   /// No instruction is inserted after already existing lifetime closers for `i`.
-  private mutating func insertClose<T: RegionEntry>(
+  private mutating func insertClose<T: IRRegionEntry>(
     _: T.Type, _ i: InstructionIdentity, atBoundariesOf r: Lifetime
   ) {
     for boundary in r.upperBoundaries {
       switch boundary {
       case .after(let u):
         // Skip the insertion if the last user already closes the borrow.
-        if let e = instructions[u] as? RegionEnd<T>, e.start.instruction == i {
+        if let e = instructions[u] as? IRRegionEnd<T>, e.start.instruction == i {
           continue
         }
         let a = instructions[u].anchor
-        insert(RegionEnd<T>(start: .register(i), anchor: a), after: u)
+        insert(IRRegionEnd<T>(start: .register(i), anchor: a), after: u)
 
       case .start(let b):
         let a = blocks[b].first.map({ (s) in instructions[s].anchor }) ?? instructions[i].anchor
-        insert(RegionEnd<T>(start: .register(i), anchor: a), at: boundary)
+        insert(IRRegionEnd<T>(start: .register(i), anchor: a), at: boundary)
 
       default:
         unreachable()
