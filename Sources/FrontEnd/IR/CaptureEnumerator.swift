@@ -117,4 +117,3 @@ internal struct CaptureEnumerator: SyntaxVisitor {
   }
 
 }
-

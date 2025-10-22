@@ -168,7 +168,6 @@ public struct Module: Sendable {
     ns.lazy.compactMap({ (n) in cast(n, to: t) })
   }
 
-
   /// Returns the innermost scope that strictly contains `n`.
   public func parent<T: SyntaxIdentity>(containing n: T) -> ScopeIdentity {
     assert(isScoped, "unscoped module")
@@ -238,7 +237,7 @@ public struct Module: Sendable {
 
   /// Adds an IR function with the given properties to this module and returns its identity.
   internal mutating func addFunction(
-    name: IRFunction.Name,  labels: [String?]
+    name: IRFunction.Name, labels: [String?]
   ) -> IRFunction.Identity {
     if let i = functions.index(forKey: name) {
       assert(functions.values[i].name == name)

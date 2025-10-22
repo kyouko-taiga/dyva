@@ -70,7 +70,7 @@ public struct DirectedGraph<Vertex: Hashable & Sendable, Label: Sendable>: Senda
   @discardableResult
   public mutating func insertVertex(_ v: Vertex) -> Bool {
     modify(&out[v]) { (o) in
-      if (o == nil) {
+      if o == nil {
         o = [:]
         return true
       } else {
@@ -202,7 +202,7 @@ extension DirectedGraph.Edge: Comparable where Vertex: Comparable, Label: Compar
 }
 
 /// The vertices of a graph collected in a breadth-first manner.
-public struct BreadthFirstSequence<Vertex: Hashable & Sendable, Label: Sendable>: IteratorProtocol, Sequence {
+public struct BreadthFirstSequence<Vertex: Hashable & Sendable, Label: Sendable> {
 
   /// The graph whose the vertices are collected.
   public let graph: DirectedGraph<Vertex, Label>
@@ -219,6 +219,10 @@ public struct BreadthFirstSequence<Vertex: Hashable & Sendable, Label: Sendable>
     self.graph = graph
     self.toVisit.append(root)
   }
+
+}
+
+extension BreadthFirstSequence: IteratorProtocol, Sequence {
 
   /// Returns the next vertex, or `nil` if all vertices have been returned already.
   public mutating func next() -> Vertex? {
