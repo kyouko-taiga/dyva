@@ -22,6 +22,11 @@ public struct BasicBlock: Sendable {
     self.last = nil
   }
 
+  /// `true` iff `self` contains no instruction.
+  public var isEmpty: Bool {
+    first == nil
+  }
+
   /// Assigns the first instruction of `self`.
   internal mutating func setFirst(_ i: InstructionIdentity) {
     first = i
@@ -32,6 +37,12 @@ public struct BasicBlock: Sendable {
   internal mutating func setLast(_ i: InstructionIdentity) {
     last = i
     if first == nil { first = i }
+  }
+
+  /// Removes all instructions in `self`.
+  internal mutating func removeAll() {
+    first = nil
+    last = nil
   }
 
 }

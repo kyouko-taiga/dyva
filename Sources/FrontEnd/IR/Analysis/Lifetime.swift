@@ -7,10 +7,10 @@
 /// - Note: The definition of an operand `o` isn't part of `o`'s lifetime.
 internal struct Lifetime: Sendable {
 
-  fileprivate typealias Coverage = [BasicBlock.ID: BlockCoverage]
+  internal typealias Coverage = [BasicBlock.ID: BlockCoverage]
 
   /// A position before or after an instruction.
-  fileprivate enum Boundary {
+  internal enum Boundary {
 
     /// The position immediately before the first instruction of a basic block.
     case start(of: BasicBlock.ID)
@@ -44,10 +44,10 @@ internal struct Lifetime: Sendable {
   /// The operand whose `self` is the lifetime.
   ///
   /// - Note: `operand` is either an instruction or a basic block parameter.
-  private let operand: IRValue
+  internal let operand: IRValue
 
   /// The set of instructions in the lifetime.
-  private let coverage: Coverage
+  internal let coverage: Coverage
 
   /// Creates an empty lifetime.
   internal init(operand: IRValue) {
@@ -56,13 +56,13 @@ internal struct Lifetime: Sendable {
   }
 
   /// Creates an instance with the given properties.
-  private init(operand: IRValue, coverage: Coverage) {
+  internal init(operand: IRValue, coverage: Coverage) {
     self.operand = operand
     self.coverage = coverage
   }
 
   /// Indicates whether the lifetime is empty.
-  private var isEmpty: Bool {
+  internal var isEmpty: Bool {
     for blockCoverage in coverage.values {
       switch blockCoverage {
       case .liveInAndOut, .liveOut, .liveIn, .closed(lastUse: .some):
@@ -79,7 +79,7 @@ internal struct Lifetime: Sendable {
   /// There's one upper boundary per basic block covered in the lifetime that isn't live-out. It
   /// falls immediately after the last element of `self` also contained in that block, or, in the
   /// case of a live-in block with no use, immediately before the first instruction.
-  private var upperBoundaries: some Sequence<Boundary> {
+  internal var upperBoundaries: some Sequence<Boundary> {
     coverage.lazy.compactMap { (b, c) -> Boundary? in
       switch c {
       case .liveIn(let use):

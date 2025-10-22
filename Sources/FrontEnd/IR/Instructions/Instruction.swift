@@ -7,6 +7,9 @@ public protocol Instruction: Showable, Sendable {
   /// The site to which `self` is attached.
   var anchor: SourceSpan { get }
 
+  /// `true` iff `self` extends the lifetime of its operands.
+  var isExtendingOperandLifetimes: Bool { get }
+
 }
 
 extension Instruction {
@@ -18,6 +21,10 @@ extension Instruction {
 
   public var operands: [IRValue] {
     []
+  }
+
+  public var isExtendingOperandLifetimes: Bool {
+    false
   }
 
 }

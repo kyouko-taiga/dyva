@@ -15,6 +15,8 @@ public struct List<Element> {
     }
 
     /// Returns whether the element stored at `self` precedes that stored at `other` in `list`.
+    ///
+    /// - Complexity: O(n) where n is the length of `list`.
     public func precedes(_ other: Address, in list: List) -> Bool {
       if self == other { return false }
 

@@ -5,13 +5,13 @@ import Utilities
 /// This data structure describes relation between the basic blocks of a function. The direction of
 /// the graph's edges denotes the direction of the control flow from one block to another: there an
 /// edge from `A` to `B` if the former's terminator points to the latter.
-struct ControlFlowGraph: Sendable {
+public struct ControlFlowGraph: Sendable {
 
   /// A node in the graph.
-  typealias Vertex = BasicBlock.ID
+  internal typealias Vertex = BasicBlock.ID
 
   /// An control edge label.
-  enum Label: Sendable {
+  internal enum Label: Sendable {
 
     /// A label denoting that the source is a predecessor of the target.
     case forward
@@ -31,12 +31,12 @@ struct ControlFlowGraph: Sendable {
   private var relation: Relation
 
   /// Creates an empty control flow graph.
-  init() {
+  internal init() {
     relation = DirectedGraph()
   }
 
   /// Defines `source` as a predecessor of `target`.
-  mutating func define(_ source: Vertex, predecessorOf target: Vertex) {
+  internal mutating func define(_ source: Vertex, predecessorOf target: Vertex) {
     let (inserted, label) = relation.insertEdge(from: source, to: target, labeledBy: .forward)
     if inserted {
       relation[from: target, to: source] = .backward
@@ -47,7 +47,7 @@ struct ControlFlowGraph: Sendable {
   }
 
   /// Removes `source` from the predecessors of `target`.
-  mutating func remove(_ source: Vertex, fromPredecessorsOf target: Vertex) {
+  internal mutating func remove(_ source: Vertex, fromPredecessorsOf target: Vertex) {
     switch relation[from: source, to: target] {
     case .forward:
       relation[from: source, to: target] = nil
@@ -61,25 +61,25 @@ struct ControlFlowGraph: Sendable {
   }
 
   /// Returns the successors of `source`.
-  func successors(of source: Vertex) -> [Vertex] {
+  internal func successors(of source: Vertex) -> [Vertex] {
     relation[from: source].compactMap({ tip in
       tip.value != .backward ? tip.key : nil
     })
   }
 
   /// Returns the predecessors of `target`.
-  func predecessors(of target: Vertex) -> [Vertex] {
+  internal func predecessors(of target: Vertex) -> [Vertex] {
     relation[from: target].compactMap({ tip in
       tip.value != .forward ? tip.key : nil
     })
   }
 
   /// A collection where the vertex at index `i + 1` is predecessor of the vertex at index `i`.
-  typealias PredecessorPath = [Vertex]
+  internal typealias PredecessorPath = [Vertex]
 
   /// Returns the paths originating at `ancestor` and reaching `destination` excluding those that
   /// contain `destination`.
-  func paths(to destination: Vertex, from ancestor: Vertex) -> [PredecessorPath] {
+  internal func paths(to destination: Vertex, from ancestor: Vertex) -> [PredecessorPath] {
     var v: Set = [destination]
     var c: [Vertex: [PredecessorPath]] = [:]
     return paths(to: destination, from: ancestor, notContaining: &v, cachingResultsTo: &c)
@@ -112,7 +112,7 @@ struct ControlFlowGraph: Sendable {
 extension ControlFlowGraph: CustomStringConvertible {
 
   /// The Graphviz (dot) representation of the graph.
-  var description: String {
+  public var description: String {
     var result = "strict digraph CFG {\n\n"
     for e in relation.edges {
       switch e.label {

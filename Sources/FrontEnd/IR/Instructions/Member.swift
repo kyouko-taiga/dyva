@@ -40,6 +40,11 @@ extension IR {
       operands[1...]
     }
 
+    /// `true`.
+    public var isExtendingOperandLifetimes: Bool {
+      false
+    }
+
   }
 
 }

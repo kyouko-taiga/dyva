@@ -241,10 +241,11 @@ public struct Module: Sendable {
     name: IRFunction.Name,  labels: [String?]
   ) -> IRFunction.Identity {
     if let i = functions.index(forKey: name) {
+      assert(functions.values[i].name == name)
       return i
     } else {
       let i = functions.count
-      functions[name] = .init(identity: i, labels: labels)
+      functions[name] = .init(name: name, labels: labels)
       return i
     }
   }
@@ -286,31 +287,7 @@ public struct Module: Sendable {
 
   /// Returns a textual representation of `n`.
   public func show(_ n: IRFunction.Identity) -> String {
-    let (name, function) = functions.elements[n]
-
-    // Write the signature.
-    var result = "fun \(show(name))("
-    for l in function.labels {
-      result.write(l ?? "_")
-      result.write(":")
-    }
-    result.write(")")
-
-    // Nothing more to do if the function has no definition.
-    if !function.isDefined { return result }
-
-    // Otherwise, renders the basic blocks.
-    result.write(" =\n")
-    for b in function.blocks.indices {
-      result.write("  b\(b) =\n")
-      for s in function.contents(of: b) {
-        let r = IRValue.register(s)
-        let v = function.instructions[s].show(using: self)
-        result.write("    \(r) = \(v)\n")
-      }
-    }
-
-    return result
+    functions.values[n].show(using: self)
   }
 
 }

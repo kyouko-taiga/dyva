@@ -32,12 +32,9 @@ public struct Lowerer {
 
       insertionContext.function = module[f]
       insertionContext.point = .end(of: insertionContext.function!.appendBlock(parameterCount: 0))
-      push(Frame(scope: .init(module: module.identity), locals: [:]))
-      for s in module.roots {
-        assert(module.isStatement(s), "ill-formed syntax tree")
-        lower(StatementIdentity(uncheckedFrom: s))
+      within(Frame(scope: .init(module: module.identity), locals: [:])) { (me) in
+        me.lower(block: me.module.roots)
       }
-      pop()
       module[f] = insertionContext.function.sink()
     }
 
@@ -61,13 +58,24 @@ public struct Lowerer {
 
   /// Lowers `d` to IR.
   private mutating func lower(_ d: BindingDeclaration.ID) {
-    let storage = _alloc(at: module[d].site)
+    if module[module[d].pattern].introducer.value == .var {
+      lower(stored: d)
+    } else {
+      lower(projected: d)
+    }
+  }
 
+  /// Lowers the stored bindings declared by `d` to IR.
+  private mutating func lower(stored d: BindingDeclaration.ID) {
+    let p = module[d].pattern
+    assert(module[p].introducer.value == .var)
+
+    let storage = _alloc(at: module[d].site)
     if let e = module[d].initializer {
       module.visit(pattern: module[d].pattern, with: e, at: []) { (path, p, s) in
         let anchor = module[s].site
 
-        // Nothing to declare if the pattern is a wildcard-
+        // Nothing to declare if the pattern is a wildcard.
         if module.tag(of: p) == Wildcard.self {
           lower(s)
         } else {
@@ -80,32 +88,40 @@ public struct Lowerer {
         }
       }
     }
+  }
 
-    _ = storage
+  /// Lowers the projected bindings declared by `d` to IR.
+  private mutating func lower(projected d: BindingDeclaration.ID) {
+    let p = module[d].pattern
+    assert(module[p].introducer.value == .let || module[p].introducer.value == .inout)
+
+    let effect = AccessEffect(module[p].introducer.value)
+    let source = lower(module[d].initializer!)
+    module.forEachDeclaration(in: .init(p), rootedAt: []) { (path, d) in
+      let a = module[d].site
+      var w = source
+      for i in path { w = _member(.index(i), of: w, at: a) }
+      locals[Name(identifier: module[d].identifier)] = _access(effect, on: w, at: a)
+    }
   }
 
   /// Lowers `d` to IR.
   private mutating func lower(_ d: FunctionDeclaration.ID) {
-    // Has the function been lowered already?
-    if module.functions[.lowered(d)] != nil { return }
+    withClearContext({ (me) in me.lowerInClearContext(d) })
+  }
 
+  /// Generates the IR of `d` assuming the insertion context is clear.
+  ///
+  /// This method is meant to be called by `lower(_:)`, ensuring that the context is clear.
+  private mutating func lowerInClearContext(_ d: FunctionDeclaration.ID) {
     // The function is added to the module unconditionally so that it can be referred to even if it
     // lacks a definition or it is ill-formed.
-    let l = module[d].parameters.map({ (p) in module[p].label })
-    let f = module.addFunction(name: .lowered(d), labels: l)
+    let f = module.functions.index(forKey: .lowered(d)) ?? declare(d)
 
     // Function requires a definition.
     guard let body = module[d].body else {
       module.addDiagnostic(module.missingImplementation(of: d))
       return
-    }
-
-    // Enumerate the captures to determine whether the function has a closure..
-    let captures = CaptureEnumerator.captures(of: d, in: module)
-    if captures.isEmpty {
-      locals[module[d].name] = .constant(.function(f))
-    } else {
-      todo()
     }
 
     insertionContext.function = module[f]
@@ -117,9 +133,11 @@ public struct Lowerer {
       ls[Name(identifier: module[p].identifier)] = .parameter(entry, i)
     }
 
-    push(Frame(scope: .init(node: d), locals: ls))
-    lower(body: body)
-    pop()
+    // TODO: captures
+
+    within(Frame(scope: .init(node: d), locals: ls)) { (me) in
+      me.lower(body: body)
+    }
     module[f] = insertionContext.function.sink()
   }
 
@@ -131,6 +149,12 @@ public struct Lowerer {
     } else {
       lower(block: body)
     }
+  }
+
+  /// Declares the IR function to which `d` is lowered.
+  private mutating func declare(_ d: FunctionDeclaration.ID) -> IRFunction.Identity {
+    let l = module[d].parameters.map({ (p) in module[p].label })
+    return module.addFunction(name: .lowered(d), labels: l)
   }
 
   // MARK: Expressions
@@ -166,7 +190,13 @@ public struct Lowerer {
     let f = lower(module[e].callee)
     let l = module[e].arguments.map(\.label?.value)
     let a = module[e].arguments.map({ (a) in lower(a.syntax)})
-    return _invoke(f, mapping: l, to: a, at: module[e].site)
+
+    switch module[e].style {
+    case .parenthesized:
+      return _invoke(f, mapping: l, to: a, at: module[e].site)
+    case .bracketed:
+      return _project(f, mapping: l, to: a, at: module[e].site)
+    }
   }
 
   /// Lowers `e` to IR and returns its value.
@@ -262,9 +292,28 @@ public struct Lowerer {
 
   // MARK: Statements
 
-  /// Lowers `block`, which is a list of statements to be executed in sequence.
-  private mutating func lower(block: [StatementIdentity]) {
-    for s in block {
+  /// Lowers `block`, which is a list of statements to be evaluated sequentially.
+  private mutating func lower<T: SyntaxIdentity>(block: [T]) {
+    var ss: [StatementIdentity] = []
+
+    // Hoist pure functions.
+    for n in block {
+      if let d = module.cast(n, to: FunctionDeclaration.self) {
+        let captures = CaptureEnumerator.captures(of: d, in: module)
+        if captures.isEmpty {
+          locals[module[d].name] = .constant(.function(declare(d)))
+          lower(d)
+        } else {
+          ss.append(.init(d))
+        }
+      } else {
+        // Other nodes should be statements.
+        ss.append(module.castToStatement(n) ?? unreachable("ill-formed syntax tree"))
+      }
+    }
+
+    // Lower all other statements.
+    for s in ss {
       lower(s)
       if module.isBreakingControl(s) { break }
     }
@@ -277,6 +326,8 @@ public struct Lowerer {
       lower(module.castUnchecked(s, to: Block.self))
     case Return.self:
       lower(module.castUnchecked(s, to: Return.self))
+    case Yield.self:
+      lower(module.castUnchecked(s, to: Yield.self))
     default:
       if let d = module.castToDeclaration(s) {
         lower(d)
@@ -292,14 +343,13 @@ public struct Lowerer {
   /// expression or a unit value otherwise.
   @discardableResult
   private mutating func lower(_ s: Block.ID) -> IRValue {
-    push(Frame(scope: .init(node: s), locals: [:]))
-    defer { pop() }
-
-    if let e = module.uniqueExpression(in: s) {
-      return lower(e)
-    } else {
-      lower(s)
-      return .constant(.unit)
+    within(Frame(scope: .init(node: s), locals: [:])) { (me) in
+      if let e = me.module.uniqueExpression(in: s) {
+        return me.lower(e)
+      } else {
+        me.lower(s)
+        return .constant(.unit)
+      }
     }
   }
 
@@ -311,6 +361,12 @@ public struct Lowerer {
     } else {
       _ret(.constant(.unit), at: module[s].site)
     }
+  }
+
+  /// Lowers `s` to IR.
+  private mutating func lower(_ s: Yield.ID) {
+    let v = lower(module[s].value)
+    _yld(v, at: module[s].site)
   }
 
   // MARK: Helpers
@@ -350,6 +406,31 @@ public struct Lowerer {
     }
   }
 
+  /// The current
+
+  /// Returns the result of calling `action` on a copy of `self` with a cleared insertion context.
+  ///
+  /// Use this method to wrap the lowering of a function or subscript to save the current insertion
+  /// context and restore it once `action` returns.
+  private mutating func withClearContext<T>(_ action: (inout Self) -> T) -> T {
+    var c = InsertionContext()
+    swap(&c, &insertionContext)
+    let r = action(&self)
+    swap(&c, &insertionContext)
+    return r
+  }
+
+  /// Returns the result of calling `action` on `self` within `f`.
+  ///
+  /// `f` is pushed on `self.frames` before `action` is called. When `action` returns. References
+  /// to locals set by `action` are invalidated when this method returns.
+  private mutating func within<T>(_ f: Frame, _ action: (inout Self) -> T) -> T {
+    insertionContext.frames.append(f)
+    let r = action(&self)
+    insertionContext.frames.removeLast()
+    return r
+  }
+
   /// Returns the result of calling `action` with a copy of `self` where the insertion point has
   /// been moved to `p`.
   private mutating func at<T>(_ p: InsertionPoint, _ action: (inout Self) -> T) -> T {
@@ -358,16 +439,6 @@ public struct Lowerer {
     let r = action(&self)
     swap(&q, &insertionContext.point)
     return r
-  }
-
-  /// Pushes `f` onto the stack.
-  private mutating func push(_ f: Frame) {
-    insertionContext.frames.append(f)
-  }
-
-  /// Pops the top of the stack.
-  private mutating func pop() {
-    insertionContext.frames.removeLast()
   }
 
   /// Appends a basic block taking `n` parameters at the end of the function containing the current
@@ -443,6 +514,13 @@ public struct Lowerer {
     }
   }
 
+  private mutating func _access(
+    _ capability: AccessEffect, on source: IRValue, at anchor: SourceSpan
+   ) -> IRValue {
+     insert(IR.Access(source: source, capability: capability, anchor: anchor))
+   }
+
+
   private mutating func _alloc(at anchor: SourceSpan) -> IRValue {
     insert(IR.Alloc(anchor: anchor))
   }
@@ -475,6 +553,13 @@ public struct Lowerer {
     insert(IR.Member(whole: whole, member: member, anchor: anchor))
   }
 
+  private mutating func _project(
+    _ callee: IRValue, mapping labels: [String?], to arguments: [IRValue],
+    at anchor: SourceSpan
+  ) -> IRValue {
+    insert(IR.Project(callee: callee, labels: labels, arguments: arguments, anchor: anchor))
+  }
+
   @discardableResult
   private mutating func _ret(_ value: IRValue, at anchor: SourceSpan) -> IRValue {
     insert(IR.Ret(value: value, anchor: anchor))
@@ -485,6 +570,11 @@ public struct Lowerer {
     _ value: IRValue, to target: IRValue, at anchor: SourceSpan
   ) -> IRValue {
     insert(IR.Store(value: value, target: target, anchor: anchor))
+  }
+
+  @discardableResult
+  private mutating func _yld(_ value: IRValue, at anchor: SourceSpan) -> IRValue {
+    insert(IR.Yld(value: value, anchor: anchor))
   }
 
 }

@@ -46,6 +46,9 @@ let package = Package(
 
     .target(
       name: "Utilities",
+      dependencies: [
+        .product(name: "Collections", package: "swift-collections"),
+      ],
       swiftSettings: commonSwiftSettings),
 
     .testTarget(

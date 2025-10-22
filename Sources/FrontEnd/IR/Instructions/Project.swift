@@ -1,7 +1,7 @@
 extension IR {
 
-  /// The application of a function in Dyva IR.
-  public struct Invoke: Instruction {
+  /// The application of a subscript in Dyva IR.
+  public struct Project: RegionEntry {
 
     /// The labels of the arguments.
     public let labels: [String?]
@@ -34,14 +34,19 @@ extension IR {
       operands[1...]
     }
 
+    /// `true`.
+    public var isExtendingOperandLifetimes: Bool {
+      false
+    }
+
   }
 
 }
 
-extension IR.Invoke: Showable {
+extension IR.Project: Showable {
 
   public func show(using module: Module) -> String {
-    var result = "invoke \(callee)("
+    var result = "project \(callee)("
 
     var first = true
     for (l, a) in zip(labels, arguments) {
