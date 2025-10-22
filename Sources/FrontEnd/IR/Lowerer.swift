@@ -30,12 +30,12 @@ public struct Lowerer {
     if module.isMain {
       let f = module.addFunction(name: .main, labels: [])
 
-      insertionContext.function = module[f]
-      insertionContext.point = .end(of: insertionContext.function!.appendBlock(parameterCount: 0))
+      currentFunction = module[f]
+      insertionContext.point = .end(of: currentFunction!.appendBlock(parameterCount: 0))
       within(Frame(scope: .init(module: module.identity), locals: [:])) { (me) in
         me.lower(block: me.module.roots)
       }
-      module[f] = insertionContext.function.sink()
+      module[f] = currentFunction.sink()
     }
 
     // Otherwise, `m` is a collection of top-level declarations.
@@ -124,8 +124,8 @@ public struct Lowerer {
       return
     }
 
-    insertionContext.function = module[f]
-    let entry = insertionContext.function!.appendBlock(parameterCount: module[d].parameters.count)
+    currentFunction = module[f]
+    let entry = currentFunction!.appendBlock(parameterCount: module[d].parameters.count)
 
     insertionContext.point = .end(of: entry)
     var ls: [Name: IRValue] = [:]
@@ -136,18 +136,24 @@ public struct Lowerer {
     // TODO: captures
 
     within(Frame(scope: .init(node: d), locals: ls)) { (me) in
-      me.lower(body: body)
+      me.lower(body: body, endingAt: me.module[d].site.end)
     }
-    module[f] = insertionContext.function.sink()
+    module[f] = currentFunction.sink()
   }
 
   /// Lowers the statements in `body`, which form the body of a function.
-  private mutating func lower(body: [StatementIdentity]) {
+  private mutating func lower(body: [StatementIdentity], endingAt end: SourcePosition) {
     if let e = module.uniqueExpression(in: body) {
       let v = lower(e)
       _return(v, at: .empty(at: module[e].site.end))
     } else {
       lower(block: body)
+
+      // Ensure the block has a terminator.
+      let b = insertionContext.point!.block
+      if currentFunction!.terminator(of: b) == nil {
+        _return(.constant(.unit), at: .empty(at: end))
+      }
     }
   }
 
@@ -406,7 +412,14 @@ public struct Lowerer {
     }
   }
 
-  /// The current
+  /// The current insertion function, if any.
+  private var currentFunction: IRFunction? {
+    get { insertionContext.function }
+    set { insertionContext.function = newValue }
+    _modify {
+      yield &insertionContext.function
+    }
+  }
 
   /// Returns the result of calling `action` on a copy of `self` with a cleared insertion context.
   ///
@@ -444,7 +457,7 @@ public struct Lowerer {
   /// Appends a basic block taking `n` parameters at the end of the function containing the current
   /// insertion point.
   private mutating func appendBlock(parameterCount n: Int) -> BasicBlock.ID {
-    insertionContext.function!.appendBlock(parameterCount: n)
+    currentFunction!.appendBlock(parameterCount: n)
   }
 
   /// Returns the identities of the symbols bound to `n` in the current context, if any.
@@ -504,7 +517,7 @@ public struct Lowerer {
   /// result the register assigned by `instruction`, if any.
   @discardableResult
   private mutating func insert<T: Instruction>(_ instruction: T) -> IRValue {
-    modify(&insertionContext.function!) { [p = insertionContext.point!] (f) in
+    modify(&currentFunction!) { [p = insertionContext.point!] (f) in
       switch p {
       case .start(let b):
         return .register(f.prepend(instruction, to: b))
