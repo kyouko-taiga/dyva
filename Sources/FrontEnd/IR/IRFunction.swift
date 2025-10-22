@@ -23,6 +23,9 @@ public struct IRFunction: Sendable {
   /// The argument labels of the function.
   public let labels: [String?]
 
+  /// `true` iff `self` is the lowering of a subscript.
+  public let isSubscript: Bool
+
   /// The basic blocks in the function, the first of which being the function's entry.
   public private(set) var blocks: [BasicBlock]
 
@@ -38,9 +41,10 @@ public struct IRFunction: Sendable {
   /// Creates a function that has the given `name` and that accepts arguments with `labels`.
   ///
   /// This initializer is meant to be called from `Module.addFunction(_:)`.
-  internal init(name: Name, labels: [String?]) {
+  internal init(name: Name, labels: [String?], isSubscript: Bool) {
     self.name = name
     self.labels = labels
+    self.isSubscript = isSubscript
     self.blocks = []
     self.instructions = []
     self.container = [:]

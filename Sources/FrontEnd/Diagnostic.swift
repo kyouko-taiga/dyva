@@ -120,6 +120,11 @@ extension Module {
     .init(.error, "invalid redeclaration of \(self[d].name)", at: anchorForDiagnostic(about: d))
   }
 
+  /// Returns an error indicating that yield statements cannot occur functions.
+  internal func invalidYield(_ n: Yield.ID) -> Diagnostic {
+    .init(.error, "'yield' can only occur in a subscript", at: self[n].introducer.site)
+  }
+
   /// Returns an error indicating that `d` requires an implementation.
   internal func missingImplementation(of d: FunctionDeclaration.ID) -> Diagnostic {
     .init(.error, "\(self[d].name) requires an implementation", at: anchorForDiagnostic(about: d))

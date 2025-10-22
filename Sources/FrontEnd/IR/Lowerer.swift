@@ -28,7 +28,7 @@ public struct Lowerer {
 
     // If `m` is the entry, then the whole module is the definition of a function.
     if module.isMain {
-      let f = module.addFunction(name: .main, labels: [])
+      let f = module.addFunction(name: .main, labels: [], isSubscript: false)
 
       currentFunction = module[f]
       insertionContext.point = .end(of: currentFunction!.appendBlock(parameterCount: 0))
@@ -160,7 +160,7 @@ public struct Lowerer {
   /// Declares the IR function to which `d` is lowered.
   private mutating func declare(_ d: FunctionDeclaration.ID) -> IRFunction.Identity {
     let l = module[d].parameters.map({ (p) in module[p].label })
-    return module.addFunction(name: .lowered(d), labels: l)
+    return module.addFunction(name: .lowered(d), labels: l, isSubscript: module[d].isSubscript)
   }
 
   // MARK: Expressions
@@ -371,8 +371,12 @@ public struct Lowerer {
 
   /// Lowers `s` to IR.
   private mutating func lower(_ s: Yield.ID) {
-    let v = lower(module[s].value)
-    _yield(v, at: module[s].site)
+    if currentFunction!.isSubscript {
+      let v = lower(module[s].value)
+      _yield(v, at: module[s].site)
+    } else {
+      module.addDiagnostic(module.invalidYield(s))
+    }
   }
 
   // MARK: Helpers

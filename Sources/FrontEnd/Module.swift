@@ -237,14 +237,14 @@ public struct Module: Sendable {
 
   /// Adds an IR function with the given properties to this module and returns its identity.
   internal mutating func addFunction(
-    name: IRFunction.Name, labels: [String?]
+    name: IRFunction.Name, labels: [String?], isSubscript: Bool
   ) -> IRFunction.Identity {
     if let i = functions.index(forKey: name) {
       assert(functions.values[i].name == name)
       return i
     } else {
       let i = functions.count
-      functions[name] = .init(name: name, labels: labels)
+      functions[name] = .init(name: name, labels: labels, isSubscript: isSubscript)
       return i
     }
   }
