@@ -11,19 +11,19 @@ import Utilities
 ///
 /// A dominator tree encodes the dominance relation of a control graph as a tree where a node is
 /// a basic blocks and its children are those it immediately dominates.
-struct DominatorTree: Sendable {
+internal struct DominatorTree: Sendable {
 
   /// A node in the tree.
-  typealias Node = BasicBlock.ID
+  internal typealias Node = BasicBlock.ID
 
   /// The root of the tree.
-  let root: Node
+  internal let root: Node
 
   /// The immediate dominators of each basic block.
   private var immediateDominators: [Node: Node?]
 
   /// Creates the dominator tree of `f` using its control-flow graph `g`.
-  init(function f: IRFunction, g: ControlFlowGraph) {
+  internal init(function f: IRFunction, g: ControlFlowGraph) {
     // The following is an implementation of Cooper et al.'s fast dominance iterative algorithm
     // (see "A Simple, Fast Dominance Algorithm", 2001). First, build any spanning tree rooted at
     // the function's entry.
@@ -52,7 +52,7 @@ struct DominatorTree: Sendable {
   }
 
   /// A collection containing the blocks in this tree in breadth-first order.
-  var bfs: [Node] {
+  internal var bfs: [Node] {
     let children: [Node: [Node]] = immediateDominators.reduce(into: [:]) { (children, kv) in
       if case .some(let parent) = kv.value {
         children[parent, default: []].append(kv.key)
@@ -69,7 +69,7 @@ struct DominatorTree: Sendable {
   }
 
   /// Returns the immediate dominator of `block`, if any.
-  func immediateDominator(of block: Node) -> Node? {
+  internal func immediateDominator(of block: Node) -> Node? {
     if case .some(let b) = immediateDominators[block]! {
       return b
     } else {
@@ -78,7 +78,7 @@ struct DominatorTree: Sendable {
   }
 
   /// Returns a collection containing the strict dominators of `block`.
-  func strictDominators(of block: Node) -> [Node] {
+  internal func strictDominators(of block: Node) -> [Node] {
     var result: [Node] = []
     var a = block
     while case .some(let b) = immediateDominators[a]! {
@@ -89,7 +89,7 @@ struct DominatorTree: Sendable {
   }
 
   /// Returns `true` if `a` dominates `b`.
-  func dominates(_ a: Node, _ b: Node) -> Bool {
+  internal func dominates(_ a: Node, _ b: Node) -> Bool {
     // By definition, a node dominates itself.
     if a == b { return true }
 
@@ -105,7 +105,7 @@ struct DominatorTree: Sendable {
   /// Returns `true` if the instruction identified by `d` dominates use `u` in function `f`.
   ///
   /// - Requires: `d` and `u` reside in `f`.
-  func dominates(_ d: InstructionIdentity, use: Use, in f: IRFunction) -> Bool {
+  internal func dominates(_ d: InstructionIdentity, use: Use, in f: IRFunction) -> Bool {
     // If `definition` is in the same block as `use`, check which comes first.
     let a = f.container[d]!
     let b = f.container[use.user]!
@@ -124,7 +124,7 @@ struct DominatorTree: Sendable {
 extension DominatorTree: CustomStringConvertible {
 
   /// The Graphviz (dot) representation of the tree.
-  var description: String {
+  internal var description: String {
     var result = "strict digraph D {\n\n"
     for (a, immediateDominator) in immediateDominators {
       if let b = immediateDominator {
@@ -143,7 +143,7 @@ extension DominatorTree: CustomStringConvertible {
 private struct SpanningTree: Sendable {
 
   /// A node in the tree.
-  typealias Node = BasicBlock.ID
+  internal typealias Node = BasicBlock.ID
 
   /// A map from node to its parent.
   private(set) var parents: [Node: Node?]
@@ -163,7 +163,7 @@ private struct SpanningTree: Sendable {
   ///
   /// - Requires: `v` is in the tree.
   /// - Complexity: O(1).
-  func parent(_ v: Node) -> Node? {
+  internal func parent(_ v: Node) -> Node? {
     parents[v]!
   }
 
@@ -171,7 +171,7 @@ private struct SpanningTree: Sendable {
   ///
   /// - Requires: `v` and `newParent` are in the tree and distinct; `v` isn't the root.
   /// - Complexity: O(1).
-  mutating func setParent(_ newParent: Node, forChild v: Node) {
+  internal mutating func setParent(_ newParent: Node, forChild v: Node) {
     parents[v] = .some(newParent)
   }
 
@@ -179,7 +179,7 @@ private struct SpanningTree: Sendable {
   ///
   /// - Requires: `v` is in the tree.
   /// - Complexity: O(*h*) where *h* is the height of `self`.
-  func ancestors(_ v: Node) -> [Node] {
+  internal func ancestors(_ v: Node) -> [Node] {
     var result = [v]
     while let parent = parents[result.last!]! { result.append(parent) }
     return result
@@ -189,7 +189,7 @@ private struct SpanningTree: Sendable {
   ///
   /// - Requires: `v` and `u` are in the tree.
   /// - Complexity: O(*h*) where *h* is the height of `self`.
-  func lowestCommonAncestor(_ v: Node, _ u: Node) -> Node {
+  internal func lowestCommonAncestor(_ v: Node, _ u: Node) -> Node {
     var x = ancestors(v)[...]
     var y = ancestors(u)[...]
     while x.count > y.count {
