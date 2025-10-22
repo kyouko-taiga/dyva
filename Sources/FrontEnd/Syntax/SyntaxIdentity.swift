@@ -12,7 +12,7 @@ public protocol SyntaxIdentity: Hashable, Showable, Sendable {
 extension SyntaxIdentity {
 
   /// The identity of the module containing the node represented by `self`.
-  public var module: Program.ModuleIdentity {
+  public var module: Module.Identity {
     widened.module
   }
 
@@ -57,7 +57,7 @@ public struct AnySyntaxIdentity {
   }
 
   /// Creates an instance identifying the node at offset `n` in module `m`.
-  public init(module m: Program.ModuleIdentity, offset n: Int) {
+  public init(module m: Module.Identity, offset n: Int) {
     precondition(n < UInt32.max)
     self.bits = (UInt64(m) << 32) | UInt64(n)
   }
@@ -68,7 +68,7 @@ public struct AnySyntaxIdentity {
   }
 
   /// The identity of the module containing the node represented by `self`.
-  public var module: Program.ModuleIdentity {
+  public var module: Module.Identity {
     UInt32(bits >> 32)
   }
 

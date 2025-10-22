@@ -202,6 +202,7 @@ public struct Lexer: IteratorProtocol, Sequence {
     case "var": tag = .var
     case "where": tag = .where
     case "while": tag = .while
+    case "yield": tag = .yield
     default: tag = .name
     }
 

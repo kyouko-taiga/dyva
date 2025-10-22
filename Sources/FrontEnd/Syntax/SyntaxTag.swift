@@ -41,3 +41,11 @@ extension SyntaxTag: Hashable {
   }
 
 }
+
+extension SyntaxTag: CustomStringConvertible {
+
+  public var description: String {
+    String(describing: value)
+  }
+
+}

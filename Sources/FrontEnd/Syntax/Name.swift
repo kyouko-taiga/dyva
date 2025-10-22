@@ -31,9 +31,8 @@ public struct Name: Hashable, Sendable {
   }
 
   /// Returns `true` iff `scrutinee` can be used to refer to a declaration named after `pattern`.
-  public static func ~= (pattern: Name, scrutinee: Name) -> Bool {
-    (pattern.identifier == scrutinee.identifier)
-      && (pattern.notation == .none || pattern.notation == scrutinee.notation)
+  public static func ~=(pattern: String, scrutinee: Name) -> Bool {
+    (scrutinee.notation == .none) && (scrutinee.identifier == pattern)
   }
 
 }

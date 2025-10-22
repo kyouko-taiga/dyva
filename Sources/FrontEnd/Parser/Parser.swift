@@ -391,6 +391,7 @@ public struct Parser {
           qualification: l,
           name: .init(Name(identifier: String(o.text), notation: .infix), at: o.site),
           site: o.site))
+
       let s = SourceSpan(from: start, to: module[r].site.end)
       let a = [Labeled(label: nil, syntax: r)]
       let n = module.insert(Call(callee: .init(f), arguments: a, style: .parenthesized, site: s))
@@ -1007,6 +1008,8 @@ public struct Parser {
       return try .init(parseBindingDeclaration(as: .unconditional, in: &module))
     case .while:
       return try .init(parseWhile(in: &module))
+    case .yield:
+      return try .init(parseYield(in: &module))
     default:
       return try parseAssignmentOrExpression(in: &module)
     }
@@ -1133,6 +1136,17 @@ public struct Parser {
     let site = introducer.site.extended(upTo: module[body].site.end.index)
     return module.insert(
       While(introducer: introducer, conditions: conditions, body: body, site: site))
+  }
+
+  /// Parses a yield statement.
+  private mutating func parseYield(
+    in module: inout Module
+  ) throws -> Yield.ID {
+    let introducer = try parse(.yield)
+    let value = try parseExpression(in: &module)
+
+    let site = introducer.site.extended(upTo: module[value].site.end.index)
+    return module.insert(Yield(introducer: introducer, value: value, site: site))
   }
 
   /// Parses an assignment or an expression.

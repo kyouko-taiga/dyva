@@ -13,6 +13,11 @@ import Utilities
   @Argument(transform: URL.init(fileURLWithPath:))
   private var input: URL
 
+  @Flag(
+    name: [.long],
+    help: "Output the intermediate representation.")
+  private var emitIR: Bool = false
+
   /// Creates a new instance with default options.
   public init() {}
 
@@ -23,14 +28,18 @@ import Utilities
     }
 
     var program = Program()
-    try program.load(SourceFile(contentsOf: input), asMain: true)
+    let m = try program.load(SourceFile(contentsOf: input), asMain: true).identity
 
     render(program.diagnostics)
     if program.containsError {
       CommandLine.exit(withError: ExitCode.failure)
     }
 
-    try program.run()
+    if emitIR {
+      print(program[m].ir)
+    } else {
+      try program.run()
+    }
   }
 
   /// Returns an array with the URLs of the source files in `inputs` and their subdirectories.
@@ -50,13 +59,11 @@ import Utilities
 
   /// Renders the given diagnostics to the standard error.
   private func render<T: Sequence<Diagnostic>>(_ ds: T) {
-    let s: Diagnostic.TextOutputStyle = ProcessInfo.ansiTerminalIsConnected ? .styled : .unstyled
-    var o = ""
-    for d in ds {
-      d.render(into: &o, showingPaths: .absolute, style: s)
-    }
     var stderr = StandardError()
-    print(o, to: &stderr)
+    let s: Diagnostic.TextOutputStyle = ProcessInfo.ansiTerminalIsConnected ? .styled : .unstyled
+    for d in ds {
+      d.render(into: &stderr, showingPaths: .absolute, style: s)
+    }
   }
 
   /// Writes `message` to the standard error and exit.
