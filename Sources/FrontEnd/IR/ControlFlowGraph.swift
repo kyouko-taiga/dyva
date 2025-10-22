@@ -7,9 +7,6 @@ import Utilities
 /// edge from `A` to `B` if the former's terminator points to the latter.
 public struct ControlFlowGraph: Sendable {
 
-  /// A node in the graph.
-  internal typealias Vertex = BasicBlock.ID
-
   /// An control edge label.
   internal enum Label: Sendable {
 
@@ -25,7 +22,7 @@ public struct ControlFlowGraph: Sendable {
   }
 
   /// The way a control-flow relation is represented internally.
-  private typealias Relation = DirectedGraph<Vertex, Label>
+  private typealias Relation = DirectedGraph<BasicBlock.ID, Label>
 
   /// The relation encoded by the graph.
   private var relation: Relation
@@ -36,7 +33,7 @@ public struct ControlFlowGraph: Sendable {
   }
 
   /// Defines `source` as a predecessor of `target`.
-  internal mutating func define(_ source: Vertex, predecessorOf target: Vertex) {
+  internal mutating func define(_ source: BasicBlock.ID, predecessorOf target: BasicBlock.ID) {
     let (inserted, label) = relation.insertEdge(from: source, to: target, labeledBy: .forward)
     if inserted {
       relation[from: target, to: source] = .backward
@@ -47,7 +44,7 @@ public struct ControlFlowGraph: Sendable {
   }
 
   /// Removes `source` from the predecessors of `target`.
-  internal mutating func remove(_ source: Vertex, fromPredecessorsOf target: Vertex) {
+  internal mutating func remove(_ source: BasicBlock.ID, fromPredecessorsOf target: BasicBlock.ID) {
     switch relation[from: source, to: target] {
     case .forward:
       relation[from: source, to: target] = nil
@@ -61,35 +58,38 @@ public struct ControlFlowGraph: Sendable {
   }
 
   /// Returns the successors of `source`.
-  internal func successors(of source: Vertex) -> [Vertex] {
+  internal func successors(of source: BasicBlock.ID) -> [BasicBlock.ID] {
     relation[from: source].compactMap({ tip in
       tip.value != .backward ? tip.key : nil
     })
   }
 
   /// Returns the predecessors of `target`.
-  internal func predecessors(of target: Vertex) -> [Vertex] {
+  internal func predecessors(of target: BasicBlock.ID) -> [BasicBlock.ID] {
     relation[from: target].compactMap({ tip in
       tip.value != .forward ? tip.key : nil
     })
   }
 
   /// A collection where the vertex at index `i + 1` is predecessor of the vertex at index `i`.
-  internal typealias PredecessorPath = [Vertex]
+  internal typealias PredecessorPath = [BasicBlock.ID]
 
   /// Returns the paths originating at `ancestor` and reaching `destination` excluding those that
   /// contain `destination`.
-  internal func paths(to destination: Vertex, from ancestor: Vertex) -> [PredecessorPath] {
-    var v: Set = [destination]
-    var c: [Vertex: [PredecessorPath]] = [:]
+  internal func paths(
+    to destination: BasicBlock.ID, from ancestor: BasicBlock.ID
+  ) -> [PredecessorPath] {
+    var v = BasicBlockSet()
+    var c = BasicBlockMap<[PredecessorPath]>()
     return paths(to: destination, from: ancestor, notContaining: &v, cachingResultsTo: &c)
   }
 
   /// Returns the paths originating at `ancestor` and reaching `destination` excluding those that
   /// contain the vertices in `visited`.
   private func paths(
-    to destination: Vertex, from ancestor: Vertex, notContaining visited: inout Set<Vertex>,
-    cachingResultsTo cache: inout [Vertex: [PredecessorPath]]
+    to destination: BasicBlock.ID, from ancestor: BasicBlock.ID,
+    notContaining visited: inout BasicBlockSet,
+    cachingResultsTo cache: inout BasicBlockMap<[PredecessorPath]>
   ) -> [PredecessorPath] {
     if destination == ancestor { return [[]] }
     if let r = cache[destination] { return r }

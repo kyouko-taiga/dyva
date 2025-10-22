@@ -4,6 +4,9 @@ import Utilities
 public struct BasicBlock: Sendable {
 
   /// The identity of a basic block.
+  ///
+  /// - Note: We sometimes use negative values to denote the absence the `nil` case of an optional
+  ///   more efficiently.
   public typealias ID = Int
 
   /// The number of arguments that the block accepts.
