@@ -56,6 +56,11 @@ public struct Program {
       var lowerer = Lowerer()
       lowerer.visit(&m)
 
+      // Apply IR passes.
+      for f in m.functions.values.indices {
+        m.functions.values[f].closeRegions()
+      }
+
       return (inserted: true, identity: m.identity)
     }
   }
