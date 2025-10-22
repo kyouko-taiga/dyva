@@ -2,21 +2,30 @@ import Utilities
 
 extension IRFunction {
 
+  /// Adds missing closing instructions after the last uses of region opening definitions.
+  ///
+  /// Some instructions (e.g., `access`) define a value and open non-lexical region in which that
+  /// value is considered alive. In the final IR, each opened region must be closed by an `end`
+  /// instruction after the last use of the corresponding definition, on all execution paths. This
+  /// IR pass guarantees that invariant.
+  ///
+  /// This pass expects to run after dead access elimination.
   public mutating func closeRegions() {
     for i in instructions.addresses {
       close(i)
     }
   }
 
+  /// Closes the lifetime of `i`.
   private mutating func close(_ i: InstructionIdentity) {
     switch self.instructions[i] {
-    case is IRAccess:
+    case is IRAccess, is IRProject:
       let r = extendedLiveRange(of: .register(i))
-      if r.isEmpty {
-        remove(i)
-      } else {
-        insertClose(IRAccess.self, i, atBoundariesOf: r)
-      }
+      insertClose(IRAccess.self, i, atBoundariesOf: r)
+
+    case is IRProject:
+      let r = extendedLiveRange(of: .register(i))
+      insertClose(IRAccess.self, i, atBoundariesOf: r)
 
     default:
       break

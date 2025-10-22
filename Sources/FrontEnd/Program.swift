@@ -57,8 +57,12 @@ public struct Program {
       lowerer.visit(&m)
 
       // Apply IR passes.
-      for f in m.functions.values.indices {
-        m.functions.values[f].closeRegions()
+      for i in m.functions.values.indices {
+        print(m.show(i))
+        modify(&m.functions.values[i]) { (f) in
+          f.eliminateDeadAccesses()
+          f.closeRegions()
+        }
       }
 
       return (inserted: true, identity: m.identity)
