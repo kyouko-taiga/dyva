@@ -28,6 +28,3 @@ extension Instruction {
   }
 
 }
-
-/// A namespace for instructions.
-enum IR {}

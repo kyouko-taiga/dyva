@@ -10,12 +10,12 @@ extension IRFunction {
 
   private mutating func close(_ i: InstructionIdentity) {
     switch self.instructions[i] {
-    case _ as IR.Access:
+    case _ as IRAccess:
       let r = extendedLiveRange(of: .register(i))
       if r.isEmpty {
         remove(i)
       } else {
-        insertClose(IR.Access.self, i, atBoundariesOf: r)
+        insertClose(IRAccess.self, i, atBoundariesOf: r)
       }
 
     default:

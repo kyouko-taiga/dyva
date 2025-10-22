@@ -11,23 +11,24 @@ import Utilities
 ///
 /// A dominator tree encodes the dominance relation of a control graph as a tree where a node is
 /// a basic blocks and its children are those it immediately dominates.
-struct DominatorTree: Sendable {
-
-  /// A node in the tree.
-  typealias Node = BasicBlock.ID
+internal struct DominatorTree: Sendable {
 
   /// The root of the tree.
-  let root: Node
+  internal let root: BasicBlock.ID
 
   /// The immediate dominators of each basic block.
-  private var immediateDominators: [Node: Node?]
+  ///
+  /// The array notionally encodes a map `[BasicBlock.ID: BasicBlock.ID?]`. It contains one entry
+  /// for each basic block in the function that for which `self` been created where `-1` denotes
+  /// `.some(nil)` and `-2` denotes `nil`.
+  private var immediateDominators: [BasicBlock.ID]
 
   /// Creates the dominator tree of `f` using its control-flow graph `g`.
-  init(function f: IRFunction, g: ControlFlowGraph) {
+  internal init(function f: IRFunction, controlFlow g: ControlFlowGraph) {
     // The following is an implementation of Cooper et al.'s fast dominance iterative algorithm
     // (see "A Simple, Fast Dominance Algorithm", 2001). First, build any spanning tree rooted at
     // the function's entry.
-    var t = SpanningTree(of: g, rootedAt: 0)
+    var t = SpanningTree(of: g, vertexCount: f.blocks.count)
 
     // Then, until a fixed point is reached, for each block `v` that has a predecessor `u` that
     // isn't `v`'s parent in the tree, assign `v`'s parent to the least common ancestor of `u` and
@@ -37,7 +38,7 @@ struct DominatorTree: Sendable {
       changed = false
       for v in f.blocks.indices {
         for u in g.predecessors(of: v) where t.parent(v) != u {
-          let lca = t.lowestCommonAncestor(u, t.parent(v)!)
+          let lca = t.lowestCommonAncestor(u, t.parent(v))
           if lca != t.parent(v) {
             t.setParent(lca, forChild: v)
             changed = true
@@ -52,52 +53,48 @@ struct DominatorTree: Sendable {
   }
 
   /// A collection containing the blocks in this tree in breadth-first order.
-  var bfs: [Node] {
-    let children: [Node: [Node]] = immediateDominators.reduce(into: [:]) { (children, kv) in
-      if case .some(let parent) = kv.value {
-        children[parent, default: []].append(kv.key)
-      }
+  internal var bfs: [BasicBlock.ID] {
+    var children = Array<[BasicBlock.ID]>(repeating: [], count: immediateDominators.count)
+    for (a, b) in immediateDominators.enumerated() where b >= 0 {
+      children[a].append(b)
     }
 
     var result = [root]
     var i = 0
     while i < result.count {
-      if let nodes = children[result[i]] { result.append(contentsOf: nodes) }
+      result.append(contentsOf: children[result[i]])
       i += 1
     }
     return result
   }
 
-  /// Returns the immediate dominator of `block`, if any.
-  func immediateDominator(of block: Node) -> Node? {
-    if case .some(let b) = immediateDominators[block]! {
-      return b
-    } else {
-      return nil
-    }
+  /// Returns the immediate dominator of `b`, if any.
+  internal func immediateDominator(of b: BasicBlock.ID) -> BasicBlock.ID? {
+    let d = immediateDominators[b]
+    return (d >= 0) ? d : nil
   }
 
-  /// Returns a collection containing the strict dominators of `block`.
-  func strictDominators(of block: Node) -> [Node] {
-    var result: [Node] = []
-    var a = block
-    while case .some(let b) = immediateDominators[a]! {
-      result.append(b)
-      a = b
+  /// Returns a collection containing the strict dominators of `b`.
+  internal func strictDominators(of b: BasicBlock.ID) -> [BasicBlock.ID] {
+    var result: [BasicBlock.ID] = []
+    var d = immediateDominators[b]
+    while d >= 0 {
+      result.append(d)
+      d = immediateDominators[d]
     }
     return result
   }
 
   /// Returns `true` if `a` dominates `b`.
-  func dominates(_ a: Node, _ b: Node) -> Bool {
+  internal func dominates(_ a: BasicBlock.ID, _ b: BasicBlock.ID) -> Bool {
     // By definition, a node dominates itself.
     if a == b { return true }
 
     // Walk the dominator tree from `b` up to the root to find `a`.
-    var child = b
-    while case .some(let parent) = immediateDominators[child]! {
+    var parent = immediateDominators[b]
+    while parent >= 0 {
       if parent == a { return true }
-      child = parent
+      parent = immediateDominators[b]
     }
     return false
   }
@@ -105,7 +102,7 @@ struct DominatorTree: Sendable {
   /// Returns `true` if the instruction identified by `d` dominates use `u` in function `f`.
   ///
   /// - Requires: `d` and `u` reside in `f`.
-  func dominates(_ d: InstructionIdentity, use: Use, in f: IRFunction) -> Bool {
+  internal func dominates(_ d: InstructionIdentity, use: Use, in f: IRFunction) -> Bool {
     // If `definition` is in the same block as `use`, check which comes first.
     let a = f.container[d]!
     let b = f.container[use.user]!
@@ -124,10 +121,10 @@ struct DominatorTree: Sendable {
 extension DominatorTree: CustomStringConvertible {
 
   /// The Graphviz (dot) representation of the tree.
-  var description: String {
+  internal var description: String {
     var result = "strict digraph D {\n\n"
-    for (a, immediateDominator) in immediateDominators {
-      if let b = immediateDominator {
+    for (a, b) in immediateDominators.enumerated() {
+      if b >= 0 {
         result.write("\(a) -> \(b);\n")
       } else {
         result.write("\(a);\n")
@@ -142,20 +139,20 @@ extension DominatorTree: CustomStringConvertible {
 /// A spanning tree of a control flow graph.
 private struct SpanningTree: Sendable {
 
-  /// A node in the tree.
-  typealias Node = BasicBlock.ID
-
   /// A map from node to its parent.
-  private(set) var parents: [Node: Node?]
+  ///
+  /// The array notionally encodes the same data structure as `DominatorTree.immediateDominators`.
+  private(set) var parents: [Int]
 
-  /// Creates a spanning tree of `g` rooted at `root`.
-  init(of g: ControlFlowGraph, rootedAt root: Node) {
-    parents = [:]
-    var work: [(vertex: Node, parent: Node??)] = [(root, .some(nil))]
+  /// Creates a spanning tree of `g`, whose vertices are in the range `0 ..< n`.
+  fileprivate init(of g: ControlFlowGraph, vertexCount n: Int) {
+    parents = Array(repeating: -2, count: n)
+    var work: [(vertex: BasicBlock.ID, parent: Int)] = [(0, -1)]
     while let (v, parent) = work.popLast() {
       parents[v] = parent
-      let children = g.successors(of: v).filter({ parents[$0] == nil })
-      work.append(contentsOf: children.map({ ($0, .some(v)) }))
+      for w in g.successors(of: v) where parents[w] == -2 {
+        work.append((w, v))
+      }
     }
   }
 
@@ -163,25 +160,30 @@ private struct SpanningTree: Sendable {
   ///
   /// - Requires: `v` is in the tree.
   /// - Complexity: O(1).
-  func parent(_ v: Node) -> Node? {
-    parents[v]!
+  fileprivate func parent(_ v: BasicBlock.ID) -> Int {
+    assert(parents[v] > -2)
+    return parents[v]
   }
 
   /// Sets `newParent` as `v`'s parent.
   ///
   /// - Requires: `v` and `newParent` are in the tree and distinct; `v` isn't the root.
   /// - Complexity: O(1).
-  mutating func setParent(_ newParent: Node, forChild v: Node) {
-    parents[v] = .some(newParent)
+  fileprivate mutating func setParent(_ newParent: BasicBlock.ID, forChild v: BasicBlock.ID) {
+    parents[v] = newParent
   }
 
   /// Returns collection containing `v` followed by all its ancestor, ordered by depth.
   ///
   /// - Requires: `v` is in the tree.
   /// - Complexity: O(*h*) where *h* is the height of `self`.
-  func ancestors(_ v: Node) -> [Node] {
+  fileprivate func ancestors(_ v: BasicBlock.ID) -> [BasicBlock.ID] {
     var result = [v]
-    while let parent = parents[result.last!]! { result.append(parent) }
+    var parent = parents[result.last!]
+    while parent >= 0 {
+      result.append(parent)
+      parent = parents[parent]
+    }
     return result
   }
 
@@ -189,7 +191,7 @@ private struct SpanningTree: Sendable {
   ///
   /// - Requires: `v` and `u` are in the tree.
   /// - Complexity: O(*h*) where *h* is the height of `self`.
-  func lowestCommonAncestor(_ v: Node, _ u: Node) -> Node {
+  fileprivate func lowestCommonAncestor(_ v: BasicBlock.ID, _ u: BasicBlock.ID) -> BasicBlock.ID {
     var x = ancestors(v)[...]
     var y = ancestors(u)[...]
     while x.count > y.count {
