@@ -1,44 +1,40 @@
-extension IR {
+/// The aquisition of an access to a value.
+public struct IRAccess: RegionEntry {
 
-  /// The aquisition of an access to a value.
-  public struct Access: RegionEntry {
+  /// The operands of the instruction.
+  public let operands: [IRValue]
 
-    /// The operands of the instruction.
-    public let operands: [IRValue]
+  /// The capability requested by the access.
+  public let capability: AccessEffect
 
-    /// The capability requested by the access.
-    public let capability: AccessEffect
+  /// The site to which `self` is attached.
+  public let anchor: SourceSpan
 
-    /// The site to which `self` is attached.
-    public let anchor: SourceSpan
+  /// Creates an instance with the given properties.
+  public init(source: IRValue, capability: AccessEffect, anchor: SourceSpan) {
+    self.operands = [source]
+    self.capability = capability
+    self.anchor = anchor
+  }
 
-    /// Creates an instance with the given properties.
-    public init(source: IRValue, capability: AccessEffect, anchor: SourceSpan) {
-      self.operands = [source]
-      self.capability = capability
-      self.anchor = anchor
-    }
+  /// The value being accessed.
+  public var source: IRValue {
+    operands[0]
+  }
 
-    /// The value being accessed.
-    public var source: IRValue {
-      operands[0]
-    }
+  /// The arguments passed to the target.
+  public var arguments: ArraySlice<IRValue> {
+    operands[1...]
+  }
 
-    /// The arguments passed to the target.
-    public var arguments: ArraySlice<IRValue> {
-      operands[1...]
-    }
-
-    /// `true`.
-    public var isExtendingOperandLifetimes: Bool {
-      false
-    }
-
+  /// `true`.
+  public var isExtendingOperandLifetimes: Bool {
+    false
   }
 
 }
 
-extension IR.Access: Showable {
+extension IRAccess: Showable {
 
   public func show(using module: Module) -> String {
     "access \(capability) \(source)"

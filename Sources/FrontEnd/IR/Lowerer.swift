@@ -145,7 +145,7 @@ public struct Lowerer {
   private mutating func lower(body: [StatementIdentity]) {
     if let e = module.uniqueExpression(in: body) {
       let v = lower(e)
-      _ret(v, at: .empty(at: module[e].site.end))
+      _return(v, at: .empty(at: module[e].site.end))
     } else {
       lower(block: body)
     }
@@ -357,16 +357,16 @@ public struct Lowerer {
   private mutating func lower(_ s: Return.ID) {
     if let e = module[s].value {
       let v = lower(e)
-      _ret(v, at: module[s].site)
+      _return(v, at: module[s].site)
     } else {
-      _ret(.constant(.unit), at: module[s].site)
+      _return(.constant(.unit), at: module[s].site)
     }
   }
 
   /// Lowers `s` to IR.
   private mutating func lower(_ s: Yield.ID) {
     let v = lower(module[s].value)
-    _yld(v, at: module[s].site)
+    _yield(v, at: module[s].site)
   }
 
   // MARK: Helpers
@@ -517,19 +517,19 @@ public struct Lowerer {
   private mutating func _access(
     _ capability: AccessEffect, on source: IRValue, at anchor: SourceSpan
    ) -> IRValue {
-     insert(IR.Access(source: source, capability: capability, anchor: anchor))
+     insert(IRAccess(source: source, capability: capability, anchor: anchor))
    }
 
 
   private mutating func _alloc(at anchor: SourceSpan) -> IRValue {
-    insert(IR.Alloc(anchor: anchor))
+    insert(IRAlloc(anchor: anchor))
   }
 
   @discardableResult
   private mutating func _br(
     _ target: BasicBlock.ID, _ arguments: [IRValue], at anchor: SourceSpan
   ) -> IRValue {
-    insert(IR.Br(target: target, arguments: arguments, anchor: anchor))
+    insert(IRBranch(target: target, arguments: arguments, anchor: anchor))
   }
 
   @discardableResult
@@ -537,44 +537,46 @@ public struct Lowerer {
     if condition: IRValue, then success: BasicBlock.ID, else failure: BasicBlock.ID,
     at anchor: SourceSpan
   ) -> IRValue {
-    insert(IR.CondBr(condition: condition, success: success, failure: failure, anchor: anchor))
+    let s = IRConditionalBranch(
+      condition: condition, success: success, failure: failure, anchor: anchor)
+    return insert(s)
   }
 
   private mutating func _invoke(
     _ callee: IRValue, mapping labels: [String?], to arguments: [IRValue],
     at anchor: SourceSpan
   ) -> IRValue {
-    insert(IR.Invoke(callee: callee, labels: labels, arguments: arguments, anchor: anchor))
+    insert(IRInvoke(callee: callee, labels: labels, arguments: arguments, anchor: anchor))
   }
 
   private mutating func _member(
-    _ member: IR.Member.NameOrIndex, of whole: IRValue, at anchor: SourceSpan
+    _ member: IRMember.NameOrIndex, of whole: IRValue, at anchor: SourceSpan
   ) -> IRValue {
-    insert(IR.Member(whole: whole, member: member, anchor: anchor))
+    insert(IRMember(whole: whole, member: member, anchor: anchor))
   }
 
   private mutating func _project(
     _ callee: IRValue, mapping labels: [String?], to arguments: [IRValue],
     at anchor: SourceSpan
   ) -> IRValue {
-    insert(IR.Project(callee: callee, labels: labels, arguments: arguments, anchor: anchor))
+    insert(IRProject(callee: callee, labels: labels, arguments: arguments, anchor: anchor))
   }
 
   @discardableResult
-  private mutating func _ret(_ value: IRValue, at anchor: SourceSpan) -> IRValue {
-    insert(IR.Ret(value: value, anchor: anchor))
+  private mutating func _return(_ value: IRValue, at anchor: SourceSpan) -> IRValue {
+    insert(IRReturn(value: value, anchor: anchor))
   }
 
   @discardableResult
   private mutating func _store(
     _ value: IRValue, to target: IRValue, at anchor: SourceSpan
   ) -> IRValue {
-    insert(IR.Store(value: value, target: target, anchor: anchor))
+    insert(IRStore(value: value, target: target, anchor: anchor))
   }
 
   @discardableResult
-  private mutating func _yld(_ value: IRValue, at anchor: SourceSpan) -> IRValue {
-    insert(IR.Yld(value: value, anchor: anchor))
+  private mutating func _yield(_ value: IRValue, at anchor: SourceSpan) -> IRValue {
+    insert(IRYield(value: value, anchor: anchor))
   }
 
 }
