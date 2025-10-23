@@ -19,9 +19,7 @@ public struct BasicBlockMap<Value> {
       (b < storage.count) ? storage[b] : nil
     }
     _modify {
-      if b >= storage.count {
-        storage.append(contentsOf: repeatElement(nil, count: b - storage.count))
-      }
+      if b >= storage.count { reserveCapacity(b) }
       yield &storage[b]
     }
   }
@@ -32,13 +30,16 @@ public struct BasicBlockMap<Value> {
       ((b < storage.count) ? storage[b] : nil) ?? v()
     }
     _modify {
-      if b >= storage.count {
-        storage.append(contentsOf: repeatElement(nil, count: b - storage.count))
-      }
+      if b >= storage.count { reserveCapacity(b) }
       var w = storage[b] ?? v()
       defer { storage[b] = w }
       yield &w
     }
+  }
+
+  /// Reserve enough memory to store `b` elements without allocating new memory.
+  private mutating func reserveCapacity(_ k: Int) {
+    storage.append(contentsOf: repeatElement(nil, count: k - storage.count + 1))
   }
 
 }

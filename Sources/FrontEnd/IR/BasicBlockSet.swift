@@ -16,6 +16,11 @@ public struct BasicBlockSet: Hashable, Sendable {
     self.storage = []
   }
 
+  /// Reserve enough memory to store `b` elements without allocating new memory.
+  private mutating func reserveCapacity(_ k: Int) {
+    storage.append(contentsOf: repeatElement(0, count: k - storage.count + 1))
+  }
+
 }
 
 extension BasicBlockSet: SetAlgebra {
@@ -34,9 +39,7 @@ extension BasicBlockSet: SetAlgebra {
   public mutating func insert(
     _ b: BasicBlock.ID
   ) -> (inserted: Bool, memberAfterInsert: BasicBlock.ID) {
-    if b >= storage.count {
-      storage.append(contentsOf: repeatElement(0, count: b - storage.count))
-    }
+    if b >= storage.count { reserveCapacity(b) }
     defer { storage[b] = 1 }
     return (inserted: storage[b] == 0, memberAfterInsert: b)
   }
