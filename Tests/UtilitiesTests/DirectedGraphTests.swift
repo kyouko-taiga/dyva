@@ -1,98 +1,107 @@
+import Testing
 import Utilities
-import XCTest
 
-final class DirectedGraphTests: XCTestCase {
+struct DirectedGraphTests {
 
-  func testInsertVertex() {
+  @Test func insertVertex() {
     var g = DirectedGraph<Int, Int>()
-    XCTAssert(g.insertVertex(0))
-    XCTAssert(g.insertVertex(1))
-    XCTAssertFalse(g.insertVertex(0))
+    var b: Bool
+
+    b = g.insertVertex(0)
+    #expect(b)
+    b = g.insertVertex(1)
+    #expect(b)
+    b = g.insertVertex(0)
+    #expect(!b)
   }
 
-  func testVertices() {
+  @Test func vertices() {
     var g = DirectedGraph<Int, Int>()
-    XCTAssert(g.vertices.isEmpty)
+    #expect(g.vertices.isEmpty)
 
     g.insertVertex(0)
-    XCTAssertEqual(Array(g.vertices), [0])
+    #expect(Array(g.vertices) == [0])
     g.insertEdge(from: 0, to: 1, labeledBy: 2)
-    XCTAssertEqual(Array(g.vertices).sorted(), [0, 1])
+    #expect(Array(g.vertices).sorted() == [0, 1])
   }
 
-  func testInsertEdge() {
+  @Test func insertEdge() {
     var g = DirectedGraph<Int, Int>()
 
     let x0 = g.insertEdge(from: 0, to: 0, labeledBy: 42)
-    XCTAssert(x0.inserted)
-    XCTAssertEqual(x0.labelAfterInsert, 42)
+    #expect(x0.inserted)
+    #expect(x0.labelAfterInsert == 42)
 
     let x1 = g.insertEdge(from: 0, to: 1, labeledBy: 42)
-    XCTAssert(x1.inserted)
-    XCTAssertEqual(x1.labelAfterInsert, 42)
+    #expect(x1.inserted)
+    #expect(x1.labelAfterInsert == 42)
 
     let x2 = g.insertEdge(from: 0, to: 0, labeledBy: 1337)
-    XCTAssertFalse(x2.inserted)
-    XCTAssertEqual(x2.labelAfterInsert, 42)
+    #expect(!x2.inserted)
+    #expect(x2.labelAfterInsert == 42)
   }
 
-  func testInsertEdgeWithoutLabel() {
+  @Test func insertEdgeWithoutLabel() {
     var g = DirectedGraph<Int, NoLabel>()
+    var b: Bool
 
-    XCTAssert(g.insertEdge(from: 0, to: 0))
-    XCTAssert(g.insertEdge(from: 0, to: 1))
-    XCTAssertFalse(g.insertEdge(from: 0, to: 0))
+    b = g.insertEdge(from: 0, to: 0)
+    #expect(b)
+    b = g.insertEdge(from: 0, to: 1)
+    #expect(b)
+    b = g.insertEdge(from: 0, to: 0)
+    #expect(!b)
   }
 
-  func testRemoveEdge() {
+  @Test func removeEdge() {
     var g = DirectedGraph<Int, Int>()
 
     g.insertEdge(from: 0, to: 0, labeledBy: 42)
-    XCTAssertEqual(g.removeEdge(from: 0, to: 0), 42)
-    XCTAssertNil(g.removeEdge(from: 0, to: 0))
+    #expect(g.removeEdge(from: 0, to: 0) == 42)
+    #expect(g.removeEdge(from: 0, to: 0) == nil)
   }
 
-  func testAccessTarget() {
+  @Test func accessTarget() {
     var g = DirectedGraph<Int, Int>()
 
     g.insertEdge(from: 0, to: 0, labeledBy: 1)
     g.insertEdge(from: 0, to: 1, labeledBy: 2)
-    XCTAssertEqual(g[from: 0, to: 0], 1)
-    XCTAssertEqual(g[from: 0, to: 1], 2)
-    XCTAssertNil(g[from: 0, to: 2])
-    XCTAssertNil(g[from: 2, to: 0])
+    #expect(g[from: 0, to: 0] == 1)
+    #expect(g[from: 0, to: 1] == 2)
+    #expect(g[from: 0, to: 2] == nil)
+    #expect(g[from: 2, to: 0] == nil)
 
     g[from: 0, to: 2] = 3
     g[from: 2, to: 0] = 3
-    XCTAssertEqual(g[from: 0, to: 2], 3)
-    XCTAssertEqual(g[from: 2, to: 0], 3)
+    #expect(g[from: 0, to: 2] == 3)
+    #expect(g[from: 2, to: 0] == 3)
   }
 
-  func testAccessOutgoingEdges() {
+  @Test func accessOutgoingEdges() {
     var g = DirectedGraph<Int, Int>()
 
     g.insertEdge(from: 0, to: 0, labeledBy: 1)
     g.insertEdge(from: 0, to: 1, labeledBy: 2)
-    XCTAssertEqual(g[from: 0], [0: 1, 1: 2])
-    XCTAssertEqual(g[from: 2], [:])
+    #expect(g[from: 0] == [0: 1, 1: 2])
+    #expect(g[from: 2] == [:])
 
     g[from: 0] = [2: 3]
     g[from: 2] = [0: 3]
-    XCTAssertEqual(g[from: 0], [2: 3])
-    XCTAssertEqual(g[from: 2], [0: 3])
+    #expect(g[from: 0] == [2: 3])
+    #expect(g[from: 2] == [0: 3])
   }
 
-  func testEdges() {
+  @Test func edges() {
     var g = DirectedGraph<Int, String>()
 
     let edges = [(0, "a", 1), (0, "b", 2), (1, "c", 3)]
     for e in edges {
       g[from: e.0, to: e.2] = e.1
     }
-    XCTAssert(g.edges.sorted().elementsEqual(edges, by: { $0 == $1 }))
+    #expect(g.edges.sorted().elementsEqual(edges, by: { $0 == $1 }))
   }
 
-  func testBFS() {
+  @Test func bfs() {
     var g = DirectedGraph<Int, NoLabel>()
     g.insertEdge(from: 0, to: 1)
     g.insertEdge(from: 0, to: 2)
@@ -100,40 +109,40 @@ final class DirectedGraphTests: XCTestCase {
     g.insertEdge(from: 2, to: 3)
 
     let vertices = Array(g.bfs(from: 0))
-    XCTAssertEqual(Set(vertices), [0, 1, 2, 3])
-    XCTAssertEqual(vertices.first, 0)
-    XCTAssertEqual(vertices.last, 3)
+    #expect(Set(vertices) == [0, 1, 2, 3])
+    #expect(vertices.first == 0)
+    #expect(vertices.last == 3)
   }
 
-  func testIsReachable() {
+  @Test func isReachable() {
     var g = DirectedGraph<Int, NoLabel>()
     g.insertEdge(from: 0, to: 1)
     g.insertEdge(from: 0, to: 2)
     g.insertEdge(from: 1, to: 3)
     g.insertEdge(from: 2, to: 3)
 
-    XCTAssert(g.isReachable(3, from: 0))
-    XCTAssert(g.isReachable(2, from: 0))
-    XCTAssert(g.isReachable(3, from: 1))
+    #expect(g.isReachable(3, from: 0))
+    #expect(g.isReachable(2, from: 0))
+    #expect(g.isReachable(3, from: 1))
 
-    XCTAssertFalse(g.isReachable(0, from: 3))
-    XCTAssertFalse(g.isReachable(2, from: 1))
+    #expect(!g.isReachable(0, from: 3))
+    #expect(!g.isReachable(2, from: 1))
   }
 
-  func testEquatable() {
+  @Test func equatable() {
     var g1 = DirectedGraph<Int, Bool>()
     g1.insertEdge(from: 0, to: 1, labeledBy: true)
     g1.insertEdge(from: 1, to: 0, labeledBy: false)
 
     var g2 = g1
-    XCTAssertEqual(g1, g2)
+    #expect(g1 == g2)
     g2.removeEdge(from: 0, to: 1)
-    XCTAssertNotEqual(g1, g2)
+    #expect(g1 != g2)
     g2.insertEdge(from: 0, to: 1, labeledBy: true)
-    XCTAssertEqual(g1, g2)
+    #expect(g1 == g2)
   }
 
-  func testHashable() {
+  @Test func hashable() {
     var g1 = DirectedGraph<Int, Bool>()
     g1.insertEdge(from: 0, to: 1, labeledBy: true)
     g1.insertEdge(from: 1, to: 0, labeledBy: false)
@@ -142,7 +151,7 @@ final class DirectedGraphTests: XCTestCase {
     var h2 = Hasher()
     g1.hash(into: &h1)
     g1.hash(into: &h2)
-    XCTAssertEqual(h1.finalize(), h2.finalize())
+    #expect(h1.finalize() == h2.finalize())
 
     var g2 = g1
     g2.removeEdge(from: 0, to: 1)
@@ -151,14 +160,14 @@ final class DirectedGraphTests: XCTestCase {
     h2 = Hasher()
     g1.hash(into: &h1)
     g2.hash(into: &h2)
-    XCTAssertNotEqual(h1.finalize(), h2.finalize())
+    #expect(h1.finalize() != h2.finalize())
 
     g2.insertEdge(from: 0, to: 1, labeledBy: true)
     h1 = Hasher()
     h2 = Hasher()
     g1.hash(into: &h1)
     g2.hash(into: &h2)
-    XCTAssertEqual(h1.finalize(), h2.finalize())
+    #expect(h1.finalize() == h2.finalize())
   }
 
 }

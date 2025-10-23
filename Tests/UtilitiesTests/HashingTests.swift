@@ -1,9 +1,9 @@
+import Testing
 import Utilities
-import XCTest
 
-final class HashingTests: XCTestCase {
+struct HashingTests {
 
-  func testCombineInt() {
+  @Test func combineInt() {
     var h1 = FNV()
     h1.combine(42)
     h1.combine(1337)
@@ -11,13 +11,13 @@ final class HashingTests: XCTestCase {
     var h2 = FNV()
     h2.combine(42)
     h2.combine(1337)
-    XCTAssertEqual(h1.state, h2.state)
+    #expect(h1.state == h2.state)
 
     h2.combine(23)
-    XCTAssertNotEqual(h1.state, h2.state)
+    #expect(h1.state != h2.state)
   }
 
-  func testCombineString() {
+  @Test func combineString() {
     var h1 = FNV()
     h1.combine("a")
     h1.combine("bcd")
@@ -25,10 +25,10 @@ final class HashingTests: XCTestCase {
     var h2 = FNV()
     h2.combine("a")
     h2.combine("bcd")
-    XCTAssertEqual(h1.state, h2.state)
+    #expect(h1.state == h2.state)
 
     h2.combine("xy")
-    XCTAssertNotEqual(h1.state, h2.state)
+    #expect(h1.state != h2.state)
   }
 
 }
