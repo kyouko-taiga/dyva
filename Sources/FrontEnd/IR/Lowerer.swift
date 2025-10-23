@@ -353,7 +353,7 @@ public struct Lowerer {
       if let e = me.module.uniqueExpression(in: s) {
         return me.lower(e)
       } else {
-        me.lower(s)
+        me.lower(block: me.module[s].statements)
         return .constant(.unit)
       }
     }
