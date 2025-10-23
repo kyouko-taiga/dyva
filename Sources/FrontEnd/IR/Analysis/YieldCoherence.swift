@@ -18,8 +18,7 @@ extension IRFunction {
     // Nothing to do if the function isn't a subscript or isn't defined.
     if !isSubscript || !isDefined { return }
 
-    /// A work list with the basic blocks considered as ramp candidates.
-    var work: [Int]
+    var work: [Int] = .init(minimumCapacity: blocks.count)
     /// The set of basic blocks that have been visited.
     var visited: BitArray
     /// A map from slide block to one a yield instruction in one of its preceeding ramp blocks.

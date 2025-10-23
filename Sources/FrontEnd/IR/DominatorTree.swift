@@ -54,18 +54,21 @@ internal struct DominatorTree: Sendable {
 
   /// A collection containing the blocks in this tree in breadth-first order.
   internal var bfs: [BasicBlock.ID] {
-    var children = Array<[BasicBlock.ID]>(repeating: [], count: immediateDominators.count)
-    for (a, b) in immediateDominators.enumerated() where b >= 0 {
-      children[a].append(b)
-    }
+    let n = immediateDominators.count
+    return withUnsafeTemporaryAllocation(of: [BasicBlock.ID].self, capacity: n) { (children) in
+      children.initialize(repeating: [])
+      for (a, b) in immediateDominators.enumerated() where b >= 0 {
+        children[a].append(b)
+      }
 
-    var result = [root]
-    var i = 0
-    while i < result.count {
-      result.append(contentsOf: children[result[i]])
-      i += 1
+      var result = [root]
+      var i = 0
+      while i < result.count {
+        result.append(contentsOf: children[result[i]])
+        i += 1
+      }
+      return result
     }
-    return result
   }
 
   /// Returns the immediate dominator of `b`, if any.
