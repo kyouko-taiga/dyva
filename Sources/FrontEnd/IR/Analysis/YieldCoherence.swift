@@ -14,18 +14,21 @@ extension IRFunction {
   ///
   /// In the second phase, we run another breadth-first search starting from the slides we have
   /// identified and look for illegal yield statements.
+  ///
+  /// - Complexity: O(*n*) where *n* is the number of instructions in the function.
   public mutating func checkYieldCoherence(reportingDiagnosticsTo log: inout DiagnosticSet) {
     // Nothing to do if the function isn't a subscript or isn't defined.
     if !isSubscript || !isDefined { return }
 
+    /// A work list with the basic blocks to process.
     var work: [Int] = .init(minimumCapacity: blocks.count)
     /// The set of basic blocks that have been visited.
     var visited: BitArray
     /// A map from slide block to one a yield instruction in one of its preceeding ramp blocks.
     var slide: [InstructionIdentity?] = Array(repeating: nil, count: blocks.count)
 
-    // Determine which blocks are part of the ramp by looking for yield statements from the entry.
-    work = [0]
+    // Phase 1: Determine which blocks are part of the ramp.
+    work.append(0)
     visited = BitArray(repeating: false, count: blocks.count)
     while let b = work.popLast() {
       visited[b] = true
@@ -61,7 +64,7 @@ extension IRFunction {
       }
     }
 
-    // Make sure none of the slide blocks have yield statements.
+    // Phase 2: Make sure none of the slide blocks have yield statements.
     work = slide.indices.filter({ (b) in slide[b] != nil})
     visited.fill(with: false)
     while let b = work.popLast() {
