@@ -75,9 +75,25 @@ public struct IRFunction: Sendable {
     }
   }
 
+  /// Returns the identity of the first instruction in `b` that satisfies `p`, if any.
+  public func first(
+    of b: BasicBlock.ID, where p: (any Instruction) -> Bool
+  ) -> InstructionIdentity? {
+    contents(of: b).first(where: { (i) in p(instructions[i]) })
+  }
+
   /// Returns the terminator of `b`, if any.
   public func terminator(of b: BasicBlock.ID) -> InstructionIdentity? {
     blocks[b].last.flatMap({ (i) in instructions[i].isTerminator ? i : nil })
+  }
+
+  /// Returns `true` iff `b` is terminated by a return instruction.
+  public func isReturnBlock(_ b: BasicBlock.ID) -> Bool {
+    if let i = terminator(of: b) {
+      return instructions[i] is IRReturn
+    } else {
+      return false
+    }
   }
 
   /// Returns the basic block in which `v` is defined, if any.
@@ -102,14 +118,21 @@ public struct IRFunction: Sendable {
     return nil
   }
 
+  /// Returns the successors of `b`.
+  public func successors(of b: BasicBlock.ID) -> [BasicBlock.ID] {
+    if let i = blocks[b].last, let s = instructions[i] as? any Terminator {
+      return s.successors
+    } else {
+      return []
+    }
+  }
+
   /// Returns the control flow graph of this function.
   public func controlFlow() -> ControlFlowGraph {
     var g = ControlFlowGraph()
     for a in blocks.indices {
-      if let s = blocks[a].last, let i = instructions[s] as? any Terminator {
-        for b in i.successors {
-          g.define(a, predecessorOf: b)
-        }
+      for b in successors(of: a) {
+        g.define(a, predecessorOf: b)
       }
     }
     return g

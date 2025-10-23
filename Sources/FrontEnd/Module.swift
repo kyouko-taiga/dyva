@@ -38,10 +38,7 @@ public struct Module: Sendable {
   internal var functions: OrderedDictionary<IRFunction.Name, IRFunction> = [:]
 
   /// The diagnostics accumulated during compilation.
-  internal private(set) var diagnostics = OrderedSet<Diagnostic>()
-
-  /// `true` iff at least one element in `diagnostics` is an error.
-  internal private(set) var containsError: Bool = false
+  internal private(set) var diagnostics = DiagnosticSet()
 
   /// `true` iff `self` has gone through scoping.
   public var isScoped: Bool {
@@ -254,10 +251,15 @@ public struct Module: Sendable {
   /// - requires: The diagnostic is anchored at a position in `self`.
   public mutating func addDiagnostic(_ d: Diagnostic) {
     assert(d.site.source.name == source.name)
-    diagnostics.append(d)
-    if d.level == .error {
-      containsError = true
-    }
+    diagnostics.insert(d)
+  }
+
+  /// Adds the given diagnostics to this module.
+  ///
+  /// - Requires: The diagnostics in `ds` are anchored at a positin in `self`.
+  public mutating func addDiagnostics(_ ds: DiagnosticSet) {
+    assert(ds.elements.allSatisfy({ (d) in d.site.source.name == source.name }))
+    diagnostics.formUnion(ds)
   }
 
   /// Returns a source span suitable to emit a disgnostic related to `n`.

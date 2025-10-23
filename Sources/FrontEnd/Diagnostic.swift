@@ -136,3 +136,25 @@ extension Module {
   }
 
 }
+
+extension IRFunction {
+
+  /// Returns an error indicating that `second` yields after `first` already did.
+  internal func extraneousYield(
+    _ second: InstructionIdentity, first: InstructionIdentity
+  ) -> Diagnostic {
+    let n = Diagnostic(
+      .note, "value already projected here",
+      at: .empty(at: instructions[first].anchor.start))
+    return .init(
+      .error, "subscript cannot project more than once",
+      at: .empty(at: instructions[second].anchor.start),
+      notes: [n])
+  }
+
+  /// Returns an error indicating that a yield statement is missing.
+  internal func missingYield(at site: SourceSpan) -> Diagnostic {
+    .init(.error, "subscript must yield before returning", at: site)
+  }
+
+}
