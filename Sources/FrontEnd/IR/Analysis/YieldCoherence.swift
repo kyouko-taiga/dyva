@@ -65,7 +65,7 @@ extension IRFunction {
     }
 
     // Phase 2: Make sure none of the slide blocks have yield statements.
-    work = slide.indices.filter({ (b) in slide[b] != nil})
+    work = slide.indices.filter({ (b) in slide[b] != nil })
     visited.fill(with: false)
     while let b = work.popLast() {
       visited[b] = true
