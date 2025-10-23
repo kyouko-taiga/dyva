@@ -14,12 +14,12 @@ public struct Program {
 
   /// `true` if the program has errors.
   public var containsError: Bool {
-    modules.values.contains(where: \.containsError)
+    modules.values.contains(where: \.diagnostics.containsError)
   }
 
   /// The diagnostics of the issues in the program.
   public var diagnostics: some Collection<Diagnostic> {
-    modules.values.map(\.diagnostics).joined()
+    modules.values.map(\.diagnostics.elements).joined()
   }
 
   /// Adds the given source file in this program, loaded as the entry iff `isMain` is `true`.
@@ -43,7 +43,7 @@ public struct Program {
       }
 
       // Bail out if there was a parse error.
-      guard !m.containsError else {
+      guard !m.diagnostics.containsError else {
         modules[s.name] = m
         return (inserted: true, identity: m.identity)
       }
@@ -57,8 +57,14 @@ public struct Program {
       lowerer.visit(&m)
 
       // Apply IR passes.
-      for f in m.functions.values.indices {
-        m.functions.values[f].closeRegions()
+      for i in m.functions.values.indices {
+        var log = DiagnosticSet()
+        modify(&m.functions.values[i]) { (f) in
+          f.eliminateDeadAccesses()
+          f.checkYieldCoherence(reportingDiagnosticsTo: &log)
+          f.closeRegions()
+        }
+        m.addDiagnostics(log)
       }
 
       return (inserted: true, identity: m.identity)

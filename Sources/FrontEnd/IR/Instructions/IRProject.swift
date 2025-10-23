@@ -1,5 +1,5 @@
 /// The application of a subscript in Dyva IR.
-public struct IRProject: RegionEntry {
+public struct IRProject: IRRegionEntry {
 
   /// The labels of the arguments.
   public let labels: [String?]

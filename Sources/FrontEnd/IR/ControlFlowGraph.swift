@@ -74,39 +74,6 @@ public struct ControlFlowGraph: Sendable {
   /// A collection where the vertex at index `i + 1` is predecessor of the vertex at index `i`.
   internal typealias PredecessorPath = [BasicBlock.ID]
 
-  /// Returns the paths originating at `ancestor` and reaching `destination` excluding those that
-  /// contain `destination`.
-  internal func paths(
-    to destination: BasicBlock.ID, from ancestor: BasicBlock.ID
-  ) -> [PredecessorPath] {
-    var v = BasicBlockSet()
-    var c = BasicBlockMap<[PredecessorPath]>()
-    return paths(to: destination, from: ancestor, notContaining: &v, cachingResultsTo: &c)
-  }
-
-  /// Returns the paths originating at `ancestor` and reaching `destination` excluding those that
-  /// contain the vertices in `visited`.
-  private func paths(
-    to destination: BasicBlock.ID, from ancestor: BasicBlock.ID,
-    notContaining visited: inout BasicBlockSet,
-    cachingResultsTo cache: inout BasicBlockMap<[PredecessorPath]>
-  ) -> [PredecessorPath] {
-    if destination == ancestor { return [[]] }
-    if let r = cache[destination] { return r }
-
-    var result: [PredecessorPath] = []
-    visited.insert(destination)
-    for p in predecessors(of: destination) where !visited.contains(p) {
-      let s = paths(
-        to: p, from: ancestor, notContaining: &visited, cachingResultsTo: &cache)
-      result.append(contentsOf: s.map({ [p] + $0 }))
-    }
-    visited.remove(destination)
-
-    cache[destination] = result
-    return result
-  }
-
 }
 
 extension ControlFlowGraph: CustomStringConvertible {

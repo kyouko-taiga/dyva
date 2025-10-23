@@ -123,7 +123,7 @@ public struct DirectedGraph<Vertex: Hashable & Sendable, Label: Sendable>: Senda
   ///   Otherwise, `nil`.
   public subscript(from source: Vertex, to target: Vertex) -> Label? {
     get { out[source]?[target] }
-    set { out[source]?[target] = newValue }
+    set { out[source, default: [:]][target] = newValue }
     _modify { yield &out[source, default: [:]][target] }
   }
 

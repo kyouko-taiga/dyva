@@ -1,5 +1,5 @@
 /// The aquisition of an access to a value.
-public struct IRAccess: RegionEntry {
+public struct IRAccess: IRRegionEntry {
 
   /// The operands of the instruction.
   public let operands: [IRValue]

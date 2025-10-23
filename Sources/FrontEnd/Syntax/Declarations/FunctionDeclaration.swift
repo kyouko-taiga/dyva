@@ -31,6 +31,11 @@ public struct FunctionDeclaration: Declaration, Scope {
     self.site = site
   }
 
+  /// `true` iff `self` declares a subscript.
+  public var isSubscript: Bool {
+    introducer.tag == .subscript
+  }
+
   /// Returns a textual representation of `self`, which is in `module`.
   public func show(using module: Module) -> String {
     var result = "\(introducer.text) \(name)(\(module.show(parameters)))"

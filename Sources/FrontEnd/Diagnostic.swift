@@ -120,6 +120,11 @@ extension Module {
     .init(.error, "invalid redeclaration of \(self[d].name)", at: anchorForDiagnostic(about: d))
   }
 
+  /// Returns an error indicating that yield statements cannot occur functions.
+  internal func invalidYield(_ n: Yield.ID) -> Diagnostic {
+    .init(.error, "'yield' can only occur in a subscript", at: self[n].introducer.site)
+  }
+
   /// Returns an error indicating that `d` requires an implementation.
   internal func missingImplementation(of d: FunctionDeclaration.ID) -> Diagnostic {
     .init(.error, "\(self[d].name) requires an implementation", at: anchorForDiagnostic(about: d))
@@ -128,6 +133,28 @@ extension Module {
   /// Returns an error indicating that `n` is undefined.
   internal func undefinedSymbol(_ n: Name, at site: SourceSpan) -> Diagnostic {
     .init(.error, "undefined symbol '\(n)'", at: site)
+  }
+
+}
+
+extension IRFunction {
+
+  /// Returns an error indicating that `second` yields after `first` already did.
+  internal func extraneousYield(
+    _ second: InstructionIdentity, first: InstructionIdentity
+  ) -> Diagnostic {
+    let n = Diagnostic(
+      .note, "value already projected here",
+      at: .empty(at: instructions[first].anchor.start))
+    return .init(
+      .error, "subscript cannot project more than once",
+      at: .empty(at: instructions[second].anchor.start),
+      notes: [n])
+  }
+
+  /// Returns an error indicating that a yield statement is missing.
+  internal func missingYield(at site: SourceSpan) -> Diagnostic {
+    .init(.error, "subscript must yield before returning", at: site)
   }
 
 }
