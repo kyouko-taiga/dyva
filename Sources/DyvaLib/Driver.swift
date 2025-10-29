@@ -3,8 +3,8 @@ import Foundation
 import FrontEnd
 import Utilities
 
-/// The top-level command of `hc`.
-@main struct CommandLine: AsyncParsableCommand {
+/// The top-level command of `dyva`.
+public struct Driver: AsyncParsableCommand {
 
   /// Configuration for this command.
   public static let configuration = CommandConfiguration(commandName: "dyva")
@@ -21,8 +21,17 @@ import Utilities
   /// Creates a new instance with default options.
   public init() {}
 
-  /// Executes the command.
+  /// Executes the command, writing diagnostics to the standard error.
   public mutating func run() async throws {
+    var c = SystemConsole()
+    try await run(console: &c)
+  }
+
+  /// Executes the command, using `console` for interacting with standard streams.
+  public mutating func run<C: Console>(
+    console: inout C,
+    showingPaths pathStyle: FileName.PathStyle = .absolute
+  ) async throws {
     if input.hasDirectoryPath || (input.pathExtension != "dyva") {
       throw ValidationError("unexpected input: \(input.relativePath)")
     }
@@ -30,13 +39,13 @@ import Utilities
     var program = Program()
     let m = try program.load(SourceFile(contentsOf: input), asMain: true).identity
 
-    render(program.diagnostics)
+    render(program.diagnostics, to: &console.error, showingPaths: pathStyle)
     if program.containsError {
-      CommandLine.exit(withError: ExitCode.failure)
+      throw ExitCode.failure
     }
 
     if emitIR {
-      print(program[m].ir)
+      print(program[m].ir, to: &console.output)
     } else {
       try program.run()
     }
@@ -58,19 +67,14 @@ import Utilities
   }
 
   /// Renders the given diagnostics to the standard error.
-  private func render<T: Sequence<Diagnostic>>(_ ds: T) {
-    var stderr = StandardError()
+  private func render<T: Sequence<Diagnostic>, E: TextOutputStream>(
+    _ ds: T, to stderr: inout E,
+    showingPaths pathStyle: FileName.PathStyle = .absolute
+  ) {
     let s: Diagnostic.TextOutputStyle = ProcessInfo.ansiTerminalIsConnected ? .styled : .unstyled
     for d in ds {
-      d.render(into: &stderr, showingPaths: .absolute, style: s)
+      d.render(into: &stderr, showingPaths: pathStyle, style: s)
     }
-  }
-
-  /// Writes `message` to the standard error and exit.
-  private func fatal(_ message: String) {
-    var stderr = StandardError()
-    print(message, to: &stderr)
-    CommandLine.exit(withError: ExitCode.failure)
   }
 
 }

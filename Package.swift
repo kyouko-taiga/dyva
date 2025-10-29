@@ -12,7 +12,7 @@ let package = Package(
     .macOS(.v14)
   ],
   products: [
-    .executable(name: "dyva", targets: ["dyva"])
+    .executable(name: "dyva", targets: ["dyva-cli"])
   ],
   dependencies: [
     .package(
@@ -27,7 +27,21 @@ let package = Package(
   ],
   targets: [
     .executableTarget(
-      name: "dyva",
+      name: "dyva-cli",
+      dependencies: [
+        .target(name: "DyvaLib")
+      ],
+      swiftSettings: commonSwiftSettings),
+
+    .executableTarget(
+      name: "dyva-tests",
+      dependencies: [
+        .product(name: "ArgumentParser", package: "swift-argument-parser")
+      ],
+      swiftSettings: commonSwiftSettings),
+
+    .target(
+      name: "DyvaLib",
       dependencies: [
         .target(name: "FrontEnd"),
         .target(name: "Utilities"),
@@ -47,9 +61,20 @@ let package = Package(
     .target(
       name: "Utilities",
       dependencies: [
-        .product(name: "Collections", package: "swift-collections"),
+        .product(name: "Collections", package: "swift-collections")
       ],
       swiftSettings: commonSwiftSettings),
+
+    .testTarget(
+      name: "EndToEndTests",
+      dependencies: [
+        .target(name: "DyvaLib"),
+        .target(name: "FrontEnd"),
+        .target(name: "Utilities"),
+      ],
+      exclude: ["negative", "positive", "README.md"],
+      swiftSettings: commonSwiftSettings,
+      plugins: ["DyvaTestsPlugin"]),
 
     .testTarget(
       name: "FrontEndTests",
@@ -64,4 +89,11 @@ let package = Package(
         .target(name: "Utilities")
       ],
       swiftSettings: commonSwiftSettings),
+
+    .plugin(
+      name: "DyvaTestsPlugin",
+      capability: .buildTool(),
+      dependencies: [
+        .target(name: "dyva-tests")
+      ]),
   ])
