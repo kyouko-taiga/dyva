@@ -11,7 +11,7 @@ public struct StringLiteral: Expression {
 
   /// The value of the literal.
   public var value: Substring {
-    site.text
+    site.text.dropFirst().dropLast()
   }
 
   /// Returns a textual representation of `self`, which is in `module`.
