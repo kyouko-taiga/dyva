@@ -34,6 +34,7 @@ public struct Lowerer {
       insertionContext.point = .end(of: currentFunction!.appendBlock(parameterCount: 0))
       within(Frame(scope: .init(module: module.identity), locals: [:])) { (me) in
         me.lower(block: me.module.roots)
+        me._return(.constant(.unit), at: .empty(at: me.module.source.span.end))
       }
       module[f] = currentFunction.sink()
     }
