@@ -1,0 +1,5 @@
+fun $main() =
+  b0 =
+    %0 = invoke print(string "hello")
+    %1 = return ()
+

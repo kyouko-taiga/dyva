@@ -1,0 +1,3 @@
+missing-yield.dyva:3.12: error: subscript must yield before returning
+    yield y
+           ^

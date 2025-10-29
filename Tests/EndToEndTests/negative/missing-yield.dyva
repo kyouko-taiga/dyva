@@ -1,0 +1,3 @@
+subscript f(x, y) =
+  if x do
+    yield y

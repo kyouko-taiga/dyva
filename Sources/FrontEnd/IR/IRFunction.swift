@@ -168,6 +168,7 @@ public struct IRFunction: Sendable {
   public mutating func append<T: Instruction>(
     _ instruction: T, to b: BasicBlock.ID
   ) -> InstructionIdentity {
+    assert(terminator(of: b) == nil, "insertion after terminator")
     if let i = blocks[b].last {
       return insert(instruction, after: i)
     } else {
@@ -202,7 +203,6 @@ public struct IRFunction: Sendable {
     _ instruction: T, after j: InstructionIdentity
   ) -> InstructionIdentity {
     let b = container[j]!
-    assert(terminator(of: b) == nil, "insertion after terminator")
     return insert(instruction) { (me, i) in
       let s = me.instructions.insert(i, after: j)
       me.container[s] = b
